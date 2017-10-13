@@ -5,3 +5,6 @@ hw5/
 hw4/
 hw3/
 
+*.swp
+*.pdf
+*.bat
