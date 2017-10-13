@@ -1,0 +1,32 @@
+
+[Test]
+natadd (ZERO, ZERO)
+
+[Value]
+ZERO
+
+[Test]
+natadd (SUCC(ZERO), (SUCC (SUCC ZERO)))
+
+[Value]
+(SUCC (SUCC (SUCC ZERO)))
+
+
+[Test]
+natadd ((SUCC ZERO), (SUCC (SUCC (SUCC ZERO))))
+
+[Value]
+(SUCC (SUCC (SUCC (SUCC (ZERO)))))
+
+[Test]
+natmul (SUCC(SUCC(ZERO)), ZERO)
+
+[Value]
+ZERO
+
+[Test]
+natmul ((SUCC (SUCC ZERO)), (SUCC (SUCC (SUCC ZERO))))
+
+[Value]
+(SUCC (SUCC (SUCC (SUCC (SUCC (SUCC ZERO))))))
+

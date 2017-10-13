@@ -1,0 +1,35 @@
+
+[Test]
+(* base case 1 *)
+sigma (20, 20, fun x -> x)
+
+[Value]
+20
+
+[Test]
+(* base case 2 *)
+sigma (20, 10, fun x -> x)
+
+[Value]
+0
+
+[Test]
+(* base case 2' *)
+sigma (2, 1, fun x -> x)
+
+[Value]
+0
+
+[Test]
+(* test 4 *)
+sigma (1, 10, fun x -> if x mod 2 = 0 then 1 else 0 )
+
+[Value]
+5
+
+[Test]
+(* test 5 *)
+sigma (1, 20, fun x -> x * x)
+
+[Value]
+2870
