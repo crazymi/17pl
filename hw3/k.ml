@@ -222,6 +222,55 @@ struct
       let (v, mem') = eval mem env e in
       let l = lookup_env_loc env x in
       (v, Mem.store mem' l v)
+    | NUM n -> (Num n, mem)
+    | TRUE -> (Bool true, mem)
+    | FALSE -> (Bool false, mem)
+    | UNIT -> (Unit, mem)
+    | VAR i -> (Mem.load mem (lookup_env_loc env i), mem)
+    | ADD (e1, e2) ->
+      let (v1, mem') = eval mem env e1 in
+      let (v2, mem'') = eval mem' env e2 in
+      (Num (value_int v1 + value_int v2), mem'')
+    | SUB (e1, e2) ->
+      let (v1, mem') = eval mem env e1 in
+      let (v2, mem'') = eval mem' env e2 in
+      (Num (value_int v1 - value_int v2), mem'')
+    | MUL (e1, e2) ->
+      let (v1, mem') = eval mem env e1 in
+      let (v2, mem'') = eval mem' env e2 in
+      (Num (value_int v1 * value_int v2), mem'')
+    | DIV (e1, e2) ->
+      let (v1, mem') = eval mem env e1 in
+      let (v2, mem'') = eval mem' env e2 in
+      (Num (value_int v1 / value_int v2), mem'')
+    | EQUAL (e1, e2) ->
+      let (v1, mem') = eval mem env e1 in
+      let (v2, mem'') = eval mem' env e2 in
+      (* TODO : Type mismatch should return false *)
+      if v1 == v2 then
+      (Bool true, mem'')
+      else
+      (Bool false, mem'')
+    | LESS (e1, e2) -> failwith "less implement"
+    | NOT e -> 
+      let (v, mem') = eval mem env e in
+      begin
+        match v with
+        | Bool b -> (Bool (not b), mem')
+        | _ -> failwith "type error"
+      end
+    | IF (e1, e2, e3) -> 
+      let (v1, mem') = eval mem env e1 in
+      begin
+        match v1 with
+        | Bool true -> eval mem' env e2
+        | Bool false -> eval mem' env e3
+        | _ -> failwith "type error"
+      end
+    | WHILE (e1, e2) -> failwith "while implement"
+    | SEQ (e1, e2) ->
+      let (v1, mem') = eval mem env e1 in
+      eval mem' env e2
     | _ -> failwith "Unimplemented" (* TODO : Implement rest of the cases *)
 
   let run (mem, env, pgm) = 
