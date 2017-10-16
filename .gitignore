@@ -3,8 +3,16 @@ hw7/
 hw6/
 hw5/
 hw4/
-hw3/
 
 *.swp
 *.pdf
 *.bat
+
+*.cmx
+*.cmi
+parser.mli
+parser.ml
+*.o
+*.cmo
+run
+
