@@ -218,10 +218,15 @@ struct
       let (v, mem') = eval mem env e1 in
       let (l, mem'') = Mem.alloc mem' in
       eval (Mem.store mem'' l v) (Env.bind env x (Addr l)) e2
+    | LETF (i, il, e1, e2) -> failwith "letf unimplemented"
     | ASSIGN (x, e) ->
       let (v, mem') = eval mem env e in
       let l = lookup_env_loc env x in
       (v, Mem.store mem' l v)
+    | CALLV (i, el) -> failwith "callv unimplemented"
+    | CALLR (i, il) -> failwith "callr unimplemented"
+    | FIELD (e, i) -> failwith "field unimplemented"
+    | ASSIGN (i, e) -> failwith "assign unimplemented"
     | NUM n -> (Num n, mem)
     | TRUE -> (Bool true, mem)
     | FALSE -> (Bool false, mem)
@@ -251,7 +256,23 @@ struct
       (Bool true, mem'')
       else
       (Bool false, mem'')
-    | LESS (e1, e2) -> failwith "less implement"
+    | LESS (e1, e2) ->
+      let (v1, mem') = eval mem env e1 in
+      let (v2, mem'') = eval mem' env e2 in
+      begin
+        match v1 with
+        | Num n1 -> 
+        begin
+          match v2 with
+          | Num n2 ->
+          if n1 < n2 then
+          (Bool true, mem'')
+          else
+          (Bool false, mem'')
+          | _ -> failwith "type error"
+        end
+        | _ -> failwith "type error"
+      end
     | NOT e -> 
       let (v, mem') = eval mem env e in
       begin
@@ -267,7 +288,18 @@ struct
         | Bool false -> eval mem' env e3
         | _ -> failwith "type error"
       end
-    | WHILE (e1, e2) -> failwith "while implement"
+    | WHILE (e1, e2) ->
+      let (v1, mem') = eval mem env e1 in
+      begin
+        match v1 with
+        | Bool true -> 
+        let (v2, mem'') = eval mem' env e2 in
+        (* while e1 do e2  *)
+        let (v3, mem2) = eval mem'' env (WHILE (e1, e2)) in
+        (v3, mem2)
+        | Bool false -> (Unit, mem')
+        | _ -> failwith "type error"
+      end
     | SEQ (e1, e2) ->
       let (v1, mem') = eval mem env e1 in
       eval mem' env e2
