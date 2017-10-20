@@ -218,15 +218,30 @@ struct
       let (v, mem') = eval mem env e1 in
       let (l, mem'') = Mem.alloc mem' in
       eval (Mem.store mem'' l v) (Env.bind env x (Addr l)) e2
-    | LETF (i, il, e1, e2) -> failwith "letf unimplemented"
+(*
+ * note that,
+ *  env_entry = Addr of Loc.t | Proc of id list * exp * env
+ *  save value : Mem.store mem loc value => mem'
+ *  id binding : Env.bind env key content => env'
+ *)
+    | LETF (i, il, e1, e2) ->
+      eval mem (Env.bind env i ( Proc (il, e1, env))) e2
     | ASSIGN (x, e) ->
       let (v, mem') = eval mem env e in
       let l = lookup_env_loc env x in
       (v, Mem.store mem' l v)
+
+(* need to store at e1.i = i -> loc of e1(v1) *)
+    | ASSIGNF (e1, i, e2) ->
+      let (v1, mem') = eval mem env e1 in
+      let (v2, mem'') = eval mem' env e2 in
+      (v2, Mem.store mem'' ((value_record v1) i) v2)
+    | RECORD _ -> failwith "record unimplemented"
     | CALLV (i, el) -> failwith "callv unimplemented"
     | CALLR (i, il) -> failwith "callr unimplemented"
-    | FIELD (e, i) -> failwith "field unimplemented"
-    | ASSIGN (i, e) -> failwith "assign unimplemented"
+    | FIELD (e, i) ->
+      let (v, mem') = eval mem env e in
+      (Mem.load mem' ((value_record v) i), mem')
     | NUM n -> (Num n, mem)
     | TRUE -> (Bool true, mem)
     | FALSE -> (Bool false, mem)
@@ -251,7 +266,6 @@ struct
     | EQUAL (e1, e2) ->
       let (v1, mem') = eval mem env e1 in
       let (v2, mem'') = eval mem' env e2 in
-      (* TODO : Type mismatch should return false *)
       if v1 == v2 then
       (Bool true, mem'')
       else
@@ -269,16 +283,16 @@ struct
           (Bool true, mem'')
           else
           (Bool false, mem'')
-          | _ -> failwith "type error"
+          | _ -> failwith "TypeError : not int"
         end
-        | _ -> failwith "type error"
+        | _ -> failwith "TypeError : not int"
       end
     | NOT e -> 
       let (v, mem') = eval mem env e in
       begin
         match v with
         | Bool b -> (Bool (not b), mem')
-        | _ -> failwith "type error"
+        | _ -> failwith "TypeError : not bool"
       end
     | IF (e1, e2, e3) -> 
       let (v1, mem') = eval mem env e1 in
@@ -286,24 +300,21 @@ struct
         match v1 with
         | Bool true -> eval mem' env e2
         | Bool false -> eval mem' env e3
-        | _ -> failwith "type error"
+        | _ -> failwith "TypeError : not bool"
       end
     | WHILE (e1, e2) ->
       let (v1, mem') = eval mem env e1 in
       begin
         match v1 with
         | Bool true -> 
-        let (v2, mem'') = eval mem' env e2 in
-        (* while e1 do e2  *)
-        let (v3, mem2) = eval mem'' env (WHILE (e1, e2)) in
-        (v3, mem2)
+          let (v2, mem'') = eval mem' env e2 in
+          eval mem'' env e
         | Bool false -> (Unit, mem')
-        | _ -> failwith "type error"
+        | _ -> failwith "TypeError : not bool"
       end
     | SEQ (e1, e2) ->
       let (v1, mem') = eval mem env e1 in
       eval mem' env e2
-    | _ -> failwith "Unimplemented" (* TODO : Implement rest of the cases *)
 
   let run (mem, env, pgm) = 
     let (v, _ ) = eval mem env pgm in
