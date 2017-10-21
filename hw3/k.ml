@@ -230,13 +230,34 @@ struct
       let (v, mem') = eval mem env e in
       let l = lookup_env_loc env x in
       (v, Mem.store mem' l v)
-
 (* need to store at e1.i = i -> loc of e1(v1) *)
     | ASSIGNF (e1, i, e2) ->
       let (v1, mem') = eval mem env e1 in
       let (v2, mem'') = eval mem' env e2 in
       (v2, Mem.store mem'' ((value_record v1) i) v2)
-    | RECORD _ -> failwith "record unimplemented"
+(* RECF in spec *)
+    | RECORD [] -> (Unit, mem)
+(* RECT in spec
+ * reassigning variables can be done via ref
+ *)
+    | RECORD rl -> 
+      let memref = ref mem in
+(* type : Record of (id -> Loc.t) *)
+      let recref = ref (fun x -> raise (Error "Unbound")) in
+      List.iter (
+          fun (i, e) -> (* RECORD : (id * exp) list *)
+            let (v, mem') = eval !memref env e in
+            let (l, mem'') = Mem.alloc mem' in
+            memref := Mem.store mem'' l v;
+(* note that, we can't write as
+ * ~ then l else !recref x
+ * it'll cause inf loop with self-recursion
+ * so we should dereference first
+ *)
+            let record = !recref in
+            recref := (fun x -> if x = i then l else record x)
+      ) rl;
+      (Record !recref, !memref)
     | CALLV (i, el) -> failwith "callv unimplemented"
     | CALLR (i, il) -> failwith "callr unimplemented"
     | FIELD (e, i) ->
@@ -283,16 +304,16 @@ struct
           (Bool true, mem'')
           else
           (Bool false, mem'')
-          | _ -> failwith "TypeError : not int"
+          | _ -> raise (Error "TypeError : not int")
         end
-        | _ -> failwith "TypeError : not int"
+        | _ -> raise (Error "TypeError : not int")
       end
     | NOT e -> 
       let (v, mem') = eval mem env e in
       begin
         match v with
         | Bool b -> (Bool (not b), mem')
-        | _ -> failwith "TypeError : not bool"
+        | _ -> raise (Error "TypeError : not bool")
       end
     | IF (e1, e2, e3) -> 
       let (v1, mem') = eval mem env e1 in
@@ -300,7 +321,7 @@ struct
         match v1 with
         | Bool true -> eval mem' env e2
         | Bool false -> eval mem' env e3
-        | _ -> failwith "TypeError : not bool"
+        | _ -> raise (Error "TypeError : not bool")
       end
     | WHILE (e1, e2) ->
       let (v1, mem') = eval mem env e1 in
@@ -310,7 +331,7 @@ struct
           let (v2, mem'') = eval mem' env e2 in
           eval mem'' env e
         | Bool false -> (Unit, mem')
-        | _ -> failwith "TypeError : not bool"
+        | _ -> raise (Error "TypeError : not bool")
       end
     | SEQ (e1, e2) ->
       let (v1, mem') = eval mem env e1 in

@@ -1,0 +1,9 @@
+let x := {a := 0} in
+x.a := 1;
+write x.a;
+x.b := 1
+
+(* Output
+1
+Error : Unbound
+*)
