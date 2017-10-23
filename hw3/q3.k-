@@ -1,0 +1,36 @@
+let emptyTree := unit
+in
+let proc leaf(n) =
+  {v := n, l := emptyTree, r := emptyTree}
+in
+let proc makeLtree(n, lp) =
+  {v := n, l := lp, r := emptyTree}
+in
+let proc makeRtree(n, rp) =
+  {v := n, l := emptyTree, r := rp}
+in
+let proc makeTree(n, lp, rp) =
+  {v := n, l := lp, r := rp}
+in
+
+let proc isEmpty(t) = 
+  if (t = emptyTree) then true else false
+in
+let proc rTree(t) = 
+  t.r
+in
+let proc lTree(t) = 
+  t.l
+in
+let proc nodeVal(t) =
+  t.n
+in
+let proc dft(t) = 1
+in
+let proc bft(t) = 1
+in
+if (isEmpty(lTree(makeLtree(1, leaf(2))))) then
+ write 1
+else
+ write 2
+
