@@ -308,7 +308,7 @@ struct
     | EQUAL (e1, e2) ->
       let (v1, mem') = eval mem env e1 in
       let (v2, mem'') = eval mem' env e2 in
-      if v1 == v2 then
+      if v1 = v2 then
       (Bool true, mem'')
       else
       (Bool false, mem'')
