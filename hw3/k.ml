@@ -245,21 +245,42 @@ struct
 (* type : Record of (id -> Loc.t) *)
       let recref = ref (fun x -> raise (Error "Unbound")) in
       List.iter (
-          fun (i, e) -> (* RECORD : (id * exp) list *)
-            let (v, mem') = eval !memref env e in
-            let (l, mem'') = Mem.alloc mem' in
-            memref := Mem.store mem'' l v;
+        fun (i, e) -> (* RECORD : (id * exp) list *)
+          let (v, mem') = eval !memref env e in
+          let (l, mem'') = Mem.alloc mem' in
+          memref := Mem.store mem'' l v;
 (* note that, we can't write as
  * ~ then l else !recref x
  * it'll cause inf loop with self-recursion
  * so we should dereference first
  *)
-            let record = !recref in
-            recref := (fun x -> if x = i then l else record x)
+          let record = !recref in
+          recref := (fun x -> if x = i then l else record x)
       ) rl;
       (Record !recref, !memref)
-    | CALLV (i, el) -> failwith "callv unimplemented"
-    | CALLR (i, il) -> failwith "callr unimplemented"
+    | CALLV (i, el) -> (* CALLV : id * exp list , f(e1,e2,...,en) *)
+      (* id_list, exp, env  *)
+      let (il, e, env') = lookup_env_proc env i in
+      let envref = ref env' in
+      let memref = ref mem in
+      List.iter2 (
+        fun exp id ->
+          let (v, mem') = eval !memref env exp in (* use !envref at this line cause unbound error *)
+          let (l, mem'') = Mem.alloc mem' in
+          memref := Mem.store mem'' l v;
+          envref := Env.bind !envref id (Addr l)
+        ) el il;
+      eval !memref (Env.bind !envref i (Proc (il, e, !envref))) e
+    | CALLR (i, il) ->
+      let (il2 ,e, env') = lookup_env_proc env i in
+      let envref = ref env' in
+      let memref = ref mem in
+      List.iter2 (
+        fun i1 i2 ->
+          let l = lookup_env_loc env i1 in
+          envref := Env.bind !envref i2 (Addr l)
+      ) il il2;
+      eval !memref (Env.bind !envref i (Proc (il2, e, !envref))) e
     | FIELD (e, i) ->
       let (v, mem') = eval mem env e in
       (Mem.load mem' ((value_record v) i), mem')
