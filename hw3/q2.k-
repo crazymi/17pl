@@ -1,0 +1,54 @@
+(*
+int numch(int n, int i)
+{
+    int cnt;
+    if (i<1)
+        return 1;
+    else
+    {
+        cnt = numch(n, i-1);
+        while(n >= money[i])
+        {
+            n -= money[i];
+            cnt += numch(n, i-1);
+        }
+        return cnt;
+    }
+}
+*)
+
+let proc money(x) = 
+  if (x=0) then 1 else (
+    if (x=1) then 10 else (
+      if (x=2) then 100 else (
+        if (x=3) then 500 else (
+          if (x=4) then 1000 else (
+            if (x=5) then 5000 else (
+              if (x=6) then 10000 else 50000
+            )
+          )
+        )
+      )
+    )
+  )
+in
+let proc help(n, i) = 
+  if (i < 1) then
+    1
+  else (
+    let cnt := 0 in
+    cnt := help(n, i-1);
+    while (money(i) < n+1) do (
+        n := (n - money(i));
+        cnt := (cnt + help(n, i-1))
+    );
+    cnt
+  )
+in
+let proc numch(n) =
+  help(n, 7)
+in
+let n := 0 in
+read n;
+write (numch(n))
+
