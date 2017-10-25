@@ -165,6 +165,7 @@ let shoppingList : require list -> (id * gift list) list =
 
     !result
 
+(*
 (* below is test code *)
 let reqA : require = (A, [Items [1; 2]; Common (Same B, Same C)])
 let reqB : require = (B, [Common (Same C, Items [2; 3])])
@@ -178,6 +179,7 @@ let _ =
   print_string "---shoppingList---";print_newline();
   let x = shoppingList(myReq) in
   print_state x
+*)
 
 (*
 let _ =
