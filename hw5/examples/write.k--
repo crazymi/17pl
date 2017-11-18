@@ -1,0 +1,2 @@
+let proc f(n) = n:=n+1 in
+write (f(3))

@@ -25,8 +25,8 @@ module Translator = struct
     | K.LESS (e1, e2) -> (trans e1)@(trans e2)@([Sm5.LESS])
     | K.NOT e -> (trans e)@([Sm5.NOT])
 
-    | K.ASSIGN (id, e) -> (trans e)@([Sm5.PUSH (Sm5.Id id); Sm5.STORE])
-    | K.SEQ (e1, e2) -> (trans e1)@(trans e2)
+    | K.ASSIGN (id, e) -> (trans e)@([Sm5.PUSH (Sm5.Id id); Sm5.STORE; Sm5.PUSH (Sm5.Id id); Sm5.LOAD])
+    | K.SEQ (e1, e2) -> (trans e1)@[Sm5.POP]@(trans e2)
     | K.IF (e1, e2, e3) -> (trans e1)@[Sm5.JTR (trans e2, trans e3)]
 
     | K.WHILE (e1, e2) ->
@@ -91,7 +91,7 @@ module Translator = struct
     | K.LETF (id, param, body, e) ->
       (* for recursive call, bind self again.
         because it'll be gone when environment change E to E' *)
-      [Sm5.PUSH (Sm5.Fn (param, [Sm5.BIND id] @ (trans body)))] @
+      [Sm5.PUSH (Sm5.Fn (param, [Sm5.BIND id] @ (trans body) @ [Sm5.UNBIND; Sm5.POP]))] @
       [Sm5.BIND id] @
       (trans e) @ [Sm5.UNBIND; Sm5.POP]
 
@@ -111,7 +111,11 @@ module Translator = struct
       [Sm5.CALL]
 
     | K.READ x -> [Sm5.GET; Sm5.PUSH (Sm5.Id x); Sm5.STORE; Sm5.PUSH (Sm5.Id x); Sm5.LOAD]
-    | K.WRITE e -> (trans e)@([Sm5.PUT])
+    | K.WRITE e ->
+      let write_id = "@write_id" in
+      (trans e) @ 
+      [Sm5.MALLOC; Sm5.BIND write_id; Sm5.PUSH (Sm5.Id write_id); Sm5.STORE; Sm5.PUSH (Sm5.Id write_id); Sm5.LOAD; Sm5.PUSH (Sm5.Id write_id); Sm5.LOAD] @
+      [Sm5.PUT]
     | _ -> failwith "Unimplemented"
 
 end
