@@ -1,0 +1,9 @@
+(* test case : nested for loop *)
+
+let i:=0 in
+let j:=0 in
+let k:=0 in
+for i:=1 to 4 do
+for j:=5 to 7 do
+for k:=-3 to 0 do
+write i+j+k
