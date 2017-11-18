@@ -1,4 +1,8 @@
+(* test case : callv *)
+
 let proc mm(x) =
   x
 in
 write (mm(3))
+
+(* Output : prints out "3\n" *)

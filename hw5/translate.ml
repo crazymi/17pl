@@ -28,8 +28,23 @@ module Translator = struct
     | K.ASSIGN (id, e) -> (trans e)@([Sm5.PUSH (Sm5.Id id); Sm5.STORE])
     | K.SEQ (e1, e2) -> (trans e1)@(trans e2)
     | K.IF (e1, e2, e3) -> (trans e1)@[Sm5.JTR (trans e2, trans e3)]
+
     | K.WHILE (e1, e2) -> failwith "while unimplemented"
-    | K.FOR (id, e1, e2, e3) -> failwith "for unimplemented"
+    | K.FOR (id, e1, e2, e3) ->
+      (* pesudo code
+        for i = e1 to e2 do e3
+        ->
+        let fun i -> if i<=e2 then (e3; fun i+1) in
+        fun e1
+      i*)
+      let for_id = "for_id" in
+      let param = id in
+      let body = K.IF ( K.LESS(K.VAR id, K.ADD(e2, K.NUM 1)), (* if i<=e2 *)
+                        (* then e3; fun i+1 *)
+                        K.SEQ (e3, K.CALLV(for_id, K.ADD(K.VAR id, K.NUM 1))),
+                        K.UNIT) in (* else unit *)
+      (trans (K.ASSIGN (id, e1))) @ 
+      (trans (K.LETF(for_id, param, body, K.CALLR (for_id, id))))
 
     | K.LETV (x, e1, e2) ->
       (trans e1) @ [Sm5.MALLOC; Sm5.BIND x; Sm5.PUSH (Sm5.Id x); Sm5.STORE] @

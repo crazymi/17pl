@@ -1,0 +1,11 @@
+(* test case : while *)
+
+let x := 1 in
+let sum := 0 in
+while x < 10 do (
+  sum:=sum+x;
+  x:=x+1
+);
+write sum
+
+(* Output : prints out "45\n" *) 
