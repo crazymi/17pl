@@ -51,7 +51,12 @@ module Translator = struct
       (trans e) @ (* push parameter = v *)
       [Sm5.MALLOC; Sm5.CALL] (* alloc for param and call = l *)
       
-    | K.CALLR (fid, aid) -> failwith "callr unimplemented"
+    | K.CALLR (id, x) ->
+      [Sm5.PUSH (Sm5.Id id)] @
+      [Sm5.PUSH (Sm5.Id id)] @
+      [Sm5.PUSH (Sm5.Id x); Sm5.LOAD] @
+      [Sm5.PUSH (Sm5.Id x)] @ (* pass pointer *)
+      [Sm5.CALL]
 
     | K.READ x -> [Sm5.GET; Sm5.PUSH (Sm5.Id x); Sm5.STORE; Sm5.PUSH (Sm5.Id x); Sm5.LOAD]
     | K.WRITE e -> (trans e)@([Sm5.PUT])
