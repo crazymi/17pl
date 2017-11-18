@@ -39,9 +39,12 @@ module Translator = struct
       let while_id = "while_id" in
       let param = "while_param" in
       let body = K.IF ( e1,
-                        K.SEQ (e2, K.CALLV(while_id, e1)),
+                        K.SEQ (e2, K.CALLV(while_id, K.NUM 1)),
                         K.UNIT) in (* else unit *)
-      (trans (K.LETF(while_id, param, body, K.CALLV (while_id, e1))))
+      (trans (K.LETF(while_id, param, body, K.CALLV (while_id, K.NUM 1))))
+      (* to prevent re-evaluate condition, pass arg as meaningless one 
+       * before implement has error while running examples/whileread.k--
+       * which has meaningless conditon evaluation *)
 
 
     | K.FOR (id, e1, e2, e3) ->
