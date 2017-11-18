@@ -54,18 +54,28 @@ module Translator = struct
         let fun i -> if i<=e2 then (e3; fun i+1) in
         fun e1
       *)
+      (*
+       * iter: added new variable to save iterator
+       * to prevent iter change inside for_body(e3)
+       * by allocate another space, reassign iter won't effect to next iteration
+       *)
       let for_id = "for_id" in
-      let param = id in
-      let body = K.IF ( K.LESS(K.VAR id, K.ADD(e2, K.NUM 1)), (* if i<=e2 == if i<e2+1 *)
+      let iter = "for_iter" in
+      let body = K.IF ( K.LESS(K.VAR iter, K.ADD(e2, K.NUM 1)), (* if i<=e2 == if i<e2+1 *)
                         (* then e3; fun i+1 *)
-                        K.SEQ (e3, K.CALLV(for_id, K.ADD(K.VAR id, K.NUM 1))),
+                        K.SEQ (
+                          K.SEQ (
+                            K.ASSIGN(id, (K.VAR iter)),
+                            e3
+                            ),
+                          K.SEQ (
+                            K.ASSIGN(iter, K.ADD(K.VAR iter, K.NUM 1)),
+                            K.CALLR(for_id, iter)
+                          )
+                        ),
                         K.UNIT) in (* else unit *)
-      (trans (K.LETF(for_id, param, body, K.CALLV (for_id, e1))))
-      (* below is initial implement of above line
-       * you can init with call by reference
-      (trans (K.ASSIGN (id, e1))) @
-      (trans (K.LETF(for_id, param, body, K.CALLR (for_id, id))))
-      *)
+      (trans (K.LETV(iter, e1, (* declare iter for this loop *)
+                (K.LETF(for_id, iter, body, K.CALLR (for_id, iter))))))
 
     | K.LETV (x, e1, e2) ->
       (trans e1) @ [Sm5.MALLOC; Sm5.BIND x; Sm5.PUSH (Sm5.Id x); Sm5.STORE] @
