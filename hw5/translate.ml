@@ -36,8 +36,8 @@ module Translator = struct
         let fun e1 -> if e1 then (e2;fun e1) in
         fun e1
       *)
-      let while_id = "while_id" in
-      let param = "while_param" in
+      let while_id = "@while_id" in
+      let param = "@while_param" in
       let body = K.IF ( e1,
                         K.SEQ (e2, K.CALLV(while_id, K.NUM 1)),
                         K.UNIT) in (* else unit *)
@@ -59,8 +59,8 @@ module Translator = struct
        * to prevent iter change inside for_body(e3)
        * by allocate another space, reassign iter won't effect to next iteration
        *)
-      let for_id = "for_id" in
-      let iter = "for_iter" in
+      let for_id = "@for_id" in
+      let iter = "@for_iter" in
       let body = K.IF ( K.LESS(K.VAR iter, K.ADD(e2, K.NUM 1)), (* if i<=e2 == if i<e2+1 *)
                         (* then e3; fun i+1 *)
                         K.SEQ (
