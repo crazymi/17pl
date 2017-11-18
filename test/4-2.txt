@@ -1,0 +1,55 @@
+[Header]
+
+let check_exception m = 
+  try (let _ = getReady m in false) with IMPOSSIBLE -> true
+
+let check_answer m ans = 
+  let res = List.sort Pervasives.compare (getReady m) in
+  let ans = List.sort Pervasives.compare ans in
+  res = ans
+
+[Test]
+(* 1 *)
+check_answer 
+(Branch (Guide ("x", End (NameBox "x")), Guide ("y", End (NameBox "y"))))
+[Bar; (Node (Bar, Bar))]
+
+[Value]
+true
+
+[Test]
+(* 2 *)
+check_answer
+(Branch(Branch(Branch(Branch(End (NameBox "a"), End(NameBox "b")), End(NameBox "c")),Branch(Branch(End (NameBox "d"), End(NameBox "e")), End(NameBox "f"))),Branch(End (NameBox "c"), End StarBox)))
+[Bar; Node (Bar, Bar); Node (Bar, Node (Bar, Bar)); Node (Bar, Node (Node (Bar, Bar), Node (Bar, Node (Bar, Bar)))) ]
+
+[Value]
+true
+
+[Test]
+(* 3 *)
+check_exception (Branch (Guide ("c", Branch (Branch(Guide ("a", Branch (End (NameBox "a"), End (NameBox "b"))), Branch (End (NameBox "b"), End (NameBox "a"))), End (NameBox "c"))), End StarBox))
+
+[Value]
+true
+
+[Test]
+(* 4 *)
+check_answer
+(Branch (End (NameBox "z"),
+	  Guide ("x", Branch( Guide("y", Branch( End (NameBox "x"), End (NameBox "y"))), End StarBox))))
+[Bar; (Node (Bar, Bar)); (Node (Node (Node (Bar, Bar), Bar), Bar))]
+
+[Value]
+true
+
+
+[Test]
+(* 5 *)
+check_answer
+(Branch (Branch (Branch (Guide ("b", Guide ("a", Branch (End (NameBox "a"), End (NameBox "b")))), End (NameBox "c")), Guide ("d", End (NameBox "d"))), End (NameBox "e")))
+[Bar; Node (Bar, Bar); Node (Node (Bar, Bar), Node (Bar, Bar))]
+
+[Value]
+true
+
