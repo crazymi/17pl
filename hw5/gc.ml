@@ -243,7 +243,7 @@ let cmds6 =
     let v = Printf.sprintf "x%d" i in [
         MALLOC; 
         BIND v; 
-        PUSH (Val (Z 1));
+        PUSH (Val (Z i));
         PUSH (Id v);
         STORE;
     ]) cmds 
@@ -252,13 +252,13 @@ let cmds6 =
   (* Another location with same base, different offset *)
   let cmds = cmds @ 
     [PUSH (Val (Z 500)); 
-    PUSH (Id "x0"); 
+    PUSH (Id "x50"); 
     PUSH (Val (Z 10)); 
     ADD; 
     STORE;   (* Env : "x0" ==> (a, 0) / Mem : (a, 10) ==> 500 *)
     ]
   in
-  
+ 
   (* Trigger GC *)
   let cmds = cmds @ [
     MALLOC;
@@ -269,7 +269,99 @@ let cmds6 =
     ]
   in
 
-  cmds @ [PUSH (Id "x0"); PUSH (Val (Z 10)); ADD; LOAD; PUT]
+  cmds @ [PUSH (Id "x50"); PUSH (Val (Z 10)); ADD;  LOAD; PUT]
+
+
+  (*test case 7*) 
+let cmds7 = 
+    let cmds = [] in 
+
+    let cmds = append 126 (fun i -> 
+        let v = Printf.sprintf "x%d" i in [ 
+            MALLOC; 
+            BIND v; 
+            PUSH (Val (Z 5)); 
+            PUSH (Id v); 
+            STORE; 
+        ]) cmds in 
+
+    let cmds = cmds @ [ 
+        MALLOC; 
+        BIND "TARGET"; 
+        PUSH (Val (Z 1234)); 
+        PUSH (Id "TARGET"); 
+        STORE; 
+        UNBIND; 
+
+        PUSH (Val (Z 10)); 
+        MALLOC; 
+        STORE; 
+        (* Trigger GC *) 
+        PUSH (Val (Z 10)); 
+        MALLOC; 
+        STORE; 
+        BOX 1; 
+        UNBOX "TARGET"; 
+        LOAD; 
+    ] in 
+
+    (* Check if allocated memory location's values are not affected by GC() *) 
+    let cmds = 
+      append 126 
+        (fun i -> 
+          let v = Printf.sprintf "x%d" i in 
+            [PUSH (Id v); 
+            LOAD; 
+            POP] 
+        ) (cmds) in 
+
+    let cmds = cmds @ [PUT] in 
+    cmds 
+
+
+(*test case 8*) 
+let cmds8 = 
+    let cmds = [ 
+        MALLOC; 
+        BIND "val"; 
+        PUSH (Val (Z 1234)); 
+        PUSH (Id "val"); 
+        STORE; 
+        UNBIND; 
+    ] in 
+
+    let cmds = append 126 (fun i -> 
+        let v = Printf.sprintf "x%d" i in [ 
+            BOX 1; 
+            MALLOC; 
+            BIND v; 
+            PUSH (Id v); 
+            STORE; 
+            UNBIND; 
+        ]) cmds in 
+
+    let cmds = cmds @ [ 
+        BOX 1; 
+        MALLOC; 
+        POP; 
+
+        (* Trigger GC *) 
+        MALLOC; 
+        POP; 
+    ] in 
+
+    (* Check if allocated memory location's values are not affected by GC() *) 
+    let cmds = 
+      append 126 
+        (fun i -> 
+          let v = Printf.sprintf "x%d" (125 - i) in 
+            [UNBOX v; 
+            LOAD;] 
+        ) (cmds) in 
+
+    let cmds = cmds @ [UNBOX "val"; LOAD; PUT] in 
+    cmds 
+
 
 let _ = run cmds1 (* 137 *)
 let _ = print_endline (string_of_bool (check_exception cmds2)) (* true *)
@@ -277,4 +369,5 @@ let _ = print_endline (string_of_bool (check_exception cmds3)) (* true *)
 let _ = print_endline (string_of_bool (check_exception cmds4)) (* true *)
 let _ = run cmds5 (* 630 *)
 let _ = run cmds6 (* 500 *)
-
+let _ = run cmds7 (* 1234 *) 
+let _ = run cmds8 (* 1234 *)
