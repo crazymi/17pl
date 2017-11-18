@@ -1,7 +1,10 @@
-all: run
+all: run gcrun
 
 run: lexer.cmo parser.cmo sm5.cmo k.cmo translate.cmo pp.cmo main.cmo
 	ocamlc -o run lexer.cmo pp.cmo parser.cmo sm5.cmo translate.cmo k.cmo main.cmo
+
+gcrun: sm5.cmo gc.cmo
+	ocamlc -o gcrun sm5.cmo gc.cmo
 
 k.cmo : k.ml
 	ocamlc -c k.ml
@@ -29,6 +32,9 @@ parser.cmo: parser.ml parser.cmi
 
 main.cmo : translate.cmo main.ml
 	ocamlc -c main.ml
+
+gc.cmo: sm5.cmo gc.ml
+	ocamlc -c gc.ml
 
 lexer.cmo: lexer.ml
 	ocamlc -c lexer.ml

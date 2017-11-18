@@ -211,9 +211,41 @@ struct
       ((!loc_id, 0), m)
     else
       let _ = reachable_locs := [] in
-      (* TODO : Add the code that marks the reachable locations.
-       * let _ = ... 
-       *)
+      let rec mark_loc cloc =
+        if not (List.mem cloc !reachable_locs) then
+        begin
+          reachable_locs := cloc :: (!reachable_locs);
+          match (List.find (fun (mloc, _) -> (cloc=mloc)) m) with
+          | (_, L floc) -> mark_loc floc
+          | (_, R rloc) -> (List.iter (fun (_, l) -> mark_loc l) rloc)
+          | _ -> ()
+        end
+      in
+      (* mark from current environment *)
+      let rec mark_from_env (_, ev) = 
+        match ev with
+        | Loc cloc -> mark_loc cloc
+        | Proc (_, _, env') -> (List.iter mark_from_env env'); ()
+      in
+      let _ = List.iter mark_from_env e in
+
+      (* mark from stack *)
+      let mark_from_stack sv = 
+        match sv with
+        | V (L cloc) -> mark_loc cloc
+        | V (R rec_list) -> (List.iter (fun (_, cloc) -> mark_loc cloc) rec_list); ()
+        | P (_, _, env') -> (List.iter mark_from_env env'); ()
+        | M ev -> mark_from_env ev; ()
+        | _ -> ()
+      in
+      let _ = List.iter mark_from_stack s in
+
+      (* mark from continuation *)
+      let mark_from_continuation (_, env') = 
+        List.iter mark_from_env env'
+      in
+      let _ = List.iter mark_from_continuation k in
+
       let new_m = List.filter (fun (l, _) -> List.mem l !reachable_locs) m in
       if List.length new_m < mem_limit then
         let _ = loc_id := !loc_id + 1 in
