@@ -255,7 +255,7 @@ struct
     | WHILE (e_cond, e_body) -> 
       let (v_cond, mem') = eval mem env e_cond in
       if value_bool v_cond then 
-        let ( _ , mem'') = eval mem env e_body in
+        let ( _ , mem'') = eval mem' env e_body in
         eval mem'' env (WHILE (e_cond, e_body))
       else
         (Unit, mem')
