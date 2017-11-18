@@ -1,0 +1,4 @@
+let proc mm(x) =
+  x
+in
+write (mm(3))

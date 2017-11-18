@@ -32,14 +32,21 @@ module Translator = struct
     | K.FOR (id, e1, e2, e3) -> failwith "for unimplemented"
 
     | K.LETV (x, e1, e2) ->
-      trans e1 @ [Sm5.MALLOC; Sm5.BIND x; Sm5.PUSH (Sm5.Id x); Sm5.STORE] @
-      trans e2 @ [Sm5.UNBIND; Sm5.POP]
+      (trans e1) @ [Sm5.MALLOC; Sm5.BIND x; Sm5.PUSH (Sm5.Id x); Sm5.STORE] @
+      (trans e2) @ [Sm5.UNBIND; Sm5.POP]
+    (* note that, K--'s proc can have only a single parameter, differ from K- *)
+    (* push(x,C') -> (x,C',E) *)
     | K.LETF (id, param, body, e) ->
-      [Sm5.PUSH (Sm5.Fn (id, trans body))] @
-      [Sm5.BIND id; Sm5.PUSH(Sm5. Id id)] @
+      [Sm5.PUSH (Sm5.Fn (param, trans body))] @
+      [Sm5.BIND id] @
       (trans e) @ [Sm5.UNBIND; Sm5.POP]
 
-    | K.CALLV (id, e) -> failwith "callv unimplemented"
+    | K.CALLV (id, e) ->
+      (* l::v::(x,C',E') *)
+      [Sm5.PUSH (Sm5.Id id)] @ (* get proc from env  = (x,C',E') *)
+      (trans e) @ (* push parameter = v *)
+      [Sm5.MALLOC; Sm5.CALL] (* alloc for param and call = l *)
+      
     | K.CALLR (fid, aid) -> failwith "callr unimplemented"
 
     | K.READ x -> [Sm5.GET; Sm5.PUSH (Sm5.Id x); Sm5.STORE; Sm5.PUSH (Sm5.Id x); Sm5.LOAD]
