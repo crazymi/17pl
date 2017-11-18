@@ -215,10 +215,15 @@ struct
         if not (List.mem cloc !reachable_locs) then
         begin
           reachable_locs := cloc :: (!reachable_locs);
-          match (List.find (fun (mloc, _) -> (cloc=mloc)) m) with
-          | (_, L floc) -> mark_loc floc
-          | (_, R rloc) -> (List.iter (fun (_, l) -> mark_loc l) rloc)
-          | _ -> ()
+          (* if base is same, but offset is different then it's a separate address *)
+          match cloc with
+          | (base, offset) ->
+          begin 
+            match (List.find (fun ((base', offset'), _) -> (base=base')) m) with
+            | (_, L floc) -> mark_loc floc
+            | (_, R rloc) -> (List.iter (fun (_, l) -> mark_loc l) rloc)
+            | (lloc, _) -> mark_loc lloc
+          end
         end
       in
       (* mark from current environment *)
