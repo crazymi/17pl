@@ -37,12 +37,16 @@ module Translator = struct
     (* note that, K--'s proc can have only a single parameter, differ from K- *)
     (* push(x,C') -> (x,C',E) *)
     | K.LETF (id, param, body, e) ->
-      [Sm5.PUSH (Sm5.Fn (param, trans body))] @
+      (* for recursive call, bind self again.
+        because it'll be gone when environment change E to E' *)
+      [Sm5.PUSH (Sm5.Fn (param, [Sm5.BIND id] @ (trans body)))] @
       [Sm5.BIND id] @
       (trans e) @ [Sm5.UNBIND; Sm5.POP]
 
     | K.CALLV (id, e) ->
       (* l::v::(x,C',E') *)
+      [Sm5.PUSH (Sm5.Id id)] @
+      (* above line is for recursive call, to handle line at LETF's [Sm5.BIND id] @ ~ *)
       [Sm5.PUSH (Sm5.Id id)] @ (* get proc from env  = (x,C',E') *)
       (trans e) @ (* push parameter = v *)
       [Sm5.MALLOC; Sm5.CALL] (* alloc for param and call = l *)
