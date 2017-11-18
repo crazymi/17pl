@@ -34,7 +34,10 @@ module Translator = struct
     | K.LETV (x, e1, e2) ->
       trans e1 @ [Sm5.MALLOC; Sm5.BIND x; Sm5.PUSH (Sm5.Id x); Sm5.STORE] @
       trans e2 @ [Sm5.UNBIND; Sm5.POP]
-    | K.LETF (id, param, body, e) -> failwith "letf unimplemented"
+    | K.LETF (id, param, body, e) ->
+      [Sm5.PUSH (Sm5.Fn (id, trans body))] @
+      [Sm5.BIND id; Sm5.PUSH(Sm5. Id id)] @
+      (trans e) @ [Sm5.UNBIND; Sm5.POP]
 
     | K.CALLV (id, e) -> failwith "callv unimplemented"
     | K.CALLR (fid, aid) -> failwith "callr unimplemented"
