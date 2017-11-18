@@ -1,0 +1,4 @@
+let i := 0 in
+let j := 0 in
+let m := 0 in
+for m := (read i) to (read j) do write 1

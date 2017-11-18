@@ -61,7 +61,8 @@ module Translator = struct
        *)
       let for_id = "@for_id" in
       let iter = "@for_iter" in
-      let body = K.IF ( K.LESS(K.VAR iter, K.ADD(e2, K.NUM 1)), (* if i<=e2 == if i<e2+1 *)
+      let for_end = "@for_end" in
+      let body = K.IF ( K.LESS(K.VAR iter, K.ADD(K.VAR for_end, K.NUM 1)), (* if i<=e2 == if i<e2+1 *)
                         (* then e3; fun i+1 *)
                         K.SEQ (
                           K.SEQ (
@@ -74,8 +75,13 @@ module Translator = struct
                           )
                         ),
                         K.UNIT) in (* else unit *)
-      (trans (K.LETV(iter, e1, (* declare iter for this loop *)
-                (K.LETF(for_id, iter, body, K.CALLR (for_id, iter))))))
+      (trans (K.LETV(iter, e1,
+                K.LETV(for_end, e2,
+                  K.LETF(for_id, iter, body, K.CALLR (for_id, iter))
+                )
+              )
+            )
+      )
 
     | K.LETV (x, e1, e2) ->
       (trans e1) @ [Sm5.MALLOC; Sm5.BIND x; Sm5.PUSH (Sm5.Id x); Sm5.STORE] @

@@ -1,0 +1,5 @@
+let i:=0 in
+let j:=3 in
+for i:=0 to j do
+  for j:=0 to i do
+    write i+1
