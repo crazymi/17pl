@@ -49,11 +49,11 @@ let rec cps' exp =
       let f = new_name () in
       let v = new_name () in
       Fn (k, 
-          App (cps' e1,
+          App (cps' e2,
               Fn (f,
-                  App(cps' e2, 
+                  App(cps' e1, 
                       Fn (v, 
-                          App (Var f, App (Var v, Var k ))
+                          App ( App (Var v, Var k), Var f )
                           )
                       )
                   )
@@ -98,7 +98,7 @@ let rec cps' exp =
               Fn (v,
                   App (cps' e2,
                       Fn (w, 
-                          App (Var k, App (Var v, Var w))
+                          App (Var k, Pair (Var v, Var w))
                           )
                       )
                   )
