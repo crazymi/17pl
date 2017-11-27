@@ -161,7 +161,8 @@ struct
       let (c, env') = getClosure v1 in
       (match c with 
       | Fun (x, e) -> eval (env' @+ (x, v2)) m'' e
-      | RecFun (f, x, e) -> eval ((env' @+ (x,v2)) @+ (f, v1)) m'' e
+      | RecFun (f, x, e) -> eval ((env' @+ (x, v2)) @+ (f, v1)) m'' e
+      )
     | IF (e1, e2, e3) ->
       let (v1, m') = eval env mem e1 in
       eval env m' (if getBool v1 then e2 else e3)
@@ -186,8 +187,49 @@ struct
     | SND e -> 
       let (v, m') = eval env mem e in
       (snd (getPair v), m')
-    (* TODO : complete the rest of interpreter *)
-    | _ -> failwith "Unimplemented"
+  (*
+  let (@+) f (x, v) = (fun y -> if y = x then v else f y)
+  let store (l, m) p = (l, m @+ p)
+  let load (_, m) l = m l
+  let malloc (l, m) = (l, (l+1, m))
+
+  and decl =
+    | REC of id * id * exp  (* Recursive function decl. (fun_id, arg_id, body) *)
+    | VAL of id * exp       (* Value decl, including non-recursive functions *)
+  *)
+    | LET (d, e) ->
+        begin
+          (* do not confuse, e' = e1, e = e2 in pdf *)
+          match d with
+          | REC (i1, i2, e') ->
+              eval (env @+ (i1, Closure (RecFun (i1, i2, e'), env))) mem e
+          | VAL (i, e') ->
+              let (v, mem') = eval env mem e' in
+              eval (env @+ (i, v)) mem' e
+        end
+    | MALLOC e ->
+        let (v, mem') = eval env mem e in
+        let (l, mem'') = malloc mem' in
+        (Loc l, store mem'' (l, v))
+    | ASSIGN (e1, e2) ->
+        let (v1, mem') = eval env mem e1 in
+        let (v2, mem'') = eval env mem' e2 in
+        begin
+          match v1 with
+          | Loc l -> (v2, store mem'' (l, v2))
+          | _ -> raise (TypeError "Not location")
+        end
+    | BANG e ->
+        let (v, mem') = eval env mem e in
+        begin
+          match v with
+          | Loc l -> (load mem' l, mem')
+          | _ -> raise (TypeError "Not location")
+        end
+    | SEQ (e1, e2) ->
+        let (v1, mem') = eval env mem e1 in
+        eval env mem' e2
+    (*| _ -> failwith "Unimplemented"*)
 
   let emptyEnv = (fun x -> raise (RunError ("unbound id: " ^ x)))
 
