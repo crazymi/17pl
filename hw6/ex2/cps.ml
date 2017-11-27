@@ -37,12 +37,27 @@ let rec cps' exp =
   let k = new_name () in
   match exp with
   (* Constant expressions *)
-  | Num n -> Fn (k, (* Fill in here *) )
-  | Var x -> Fn (k, (* Fill in here *) )
-  | Fn (x, e) -> Fn (k, (* Fill in here *) )
+  | Num n -> Fn (k, App (Var k, Num n) )
+  | Var x -> Fn (k, App (Var k, Var x) )
+  | Fn (x, e) ->
+      let k' = new_name () in
+      Fn (k, App (Var k, Fn (k', Fn (x, App (cps' e, Var k')))))
   | Rec (f, x, e) -> Fn (k, (* Fill in here *) )
   (* Non constant expressions *)
-  | App (e1, e2) -> Fn (k, (* Fill in here *) )
+  | App (e1, e2) -> 
+      let f = new_name () in
+      let v = new_name () in
+      Fn (k, 
+          App (cps' e1,
+              Fn (f,
+                  App(cps' e2, 
+                      Fn (v, 
+                          App (Var f, App (Var v, Var k ))
+                          )
+                      )
+                  )
+              )
+          )
   | Ifz (e1, e2, e3) -> Fn (k, (* Fill in here *) )
   | Add (e1, e2) ->
     let v1 = new_name () in
@@ -58,9 +73,38 @@ let rec cps' exp =
                 )
             )
         )
-  | Pair (e1, e2) -> Fn (k, (* Fill in here *) )
-  | Fst e ->  Fn (k, (* Fill in here *) )
-  | Snd e ->  Fn (k, (* Fill in here *) )
+  | Pair (e1, e2) ->
+      let v = new_name () in
+      let w = new_name () in
+      Fn (k, 
+          App (cps' e1, 
+              Fn (v,
+                  App (cps' e2,
+                      Fn (w, 
+                          App (Var k, App (Var v, Var w))
+                          )
+                      )
+                  )
+              )
+          )
+  | Fst e ->
+      let v = new_name () in
+      Fn (k, 
+          App (cps' e,
+              Fn (v,
+                  App (Var k, Fst (Var v))
+                  )
+              )
+          )
+  | Snd e ->
+      let v = new_name () in
+      Fn (k, 
+          App (cps' e,
+              Fn (v,
+                  App (Var k, Snd (Var v))
+                  )
+              )
+          )
 
 let cps exp = cps' (alpha_conv exp [])
 
