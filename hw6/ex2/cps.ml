@@ -32,7 +32,6 @@ let rec alpha_conv exp subst =
   | Fst e -> Fst (alpha_conv e subst)
   | Snd e -> Snd (alpha_conv e subst)
 
-(* TODO : Complete this function *)
 let rec cps' exp = 
   let k = new_name () in
   match exp with
@@ -60,7 +59,23 @@ let rec cps' exp =
                   )
               )
           )
-  | Ifz (e1, e2, e3) -> Fn (k, (* Fill in here *) )
+  | Ifz (e1, e2, e3) ->
+      let v1 = new_name () in
+      let v2 = new_name () in
+      let v3 = new_name () in
+      Fn (k, 
+          App (cps' e1,
+              Fn (v1,
+                  Ifz (Var v1,
+                      App (cps' e2,
+                          Fn (v2, App (Var k, Var v2)))
+                      ,
+                      App (cps' e3,
+                          Fn (v3, App (Var k, Var v3)))
+                  )
+              )
+          )
+      )
   | Add (e1, e2) ->
     let v1 = new_name () in
     let v2 = new_name () in
