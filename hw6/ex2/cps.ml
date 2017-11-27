@@ -42,7 +42,9 @@ let rec cps' exp =
   | Fn (x, e) ->
       let k' = new_name () in
       Fn (k, App (Var k, Fn (k', Fn (x, App (cps' e, Var k')))))
-  | Rec (f, x, e) -> Fn (k, (* Fill in here *) )
+  | Rec (f, x, e) ->
+      let k' = new_name () in
+      Fn (k, App (Var k, Rec (f, k', Fn (x, App (cps' e, Var k')))))
   (* Non constant expressions *)
   | App (e1, e2) -> 
       let f = new_name () in
