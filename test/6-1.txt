@@ -1,0 +1,1546 @@
+[Header]
+open Sm5
+open Parser
+open Sonata
+open Rozetta
+
+let stdout_redirect_f = "stdout_redirect.txt"
+let stdin_redirect_f = "stdin_redirect.txt"
+
+let read_all filename = 
+  let chan = open_in filename in 
+  let res = really_input_string chan (in_channel_length chan) in
+  let _ = close_in chan in 
+  res
+
+let test_run pgm_str input_str = 
+  (* Translate the program *)
+  let sm5_pgm = parse_sm5 pgm_str in
+  let sonata_pgm = Rozetta.trans sm5_pgm in
+
+  (* Write testcase input string to a file *)
+  let chan = open_out stdin_redirect_f in
+  let _ = Printf.fprintf chan input_str in
+  let _ = close_out chan in
+
+  (* Stdin Redirection *)
+  let new_stdin = open_in stdin_redirect_f in
+  let _ = Unix.dup2 (Unix.descr_of_in_channel new_stdin) Unix.stdin in
+
+  (* Stdout Redirection *)
+  let new_stdout = open_out stdout_redirect_f in
+  let _ = Unix.dup2 (Unix.descr_of_out_channel new_stdout) Unix.stdout in
+
+  (* Run the translated program *)
+  let _ = Sonata.run sonata_pgm in
+  
+  read_all stdout_redirect_f
+
+[Test]
+(* 1. Simple call by value *)
+test_run 
+(*
+  let proc succ (x) = x + 1 in
+  let proc square (x) = x * x in
+  let z := 0 in
+  (
+    read z;
+    z := square(z);
+    z := succ(z);
+    write z
+  )
+*)
+
+"
+[push (x,
+  [bind succ;
+  push x;
+  load;
+  push 1;
+  add;
+  unbind;
+  pop]
+  );
+bind succ;
+push (x,
+  [bind square;
+  push x;
+  load;
+  push x;
+  load;
+  mul;
+  unbind;
+  pop]
+  );
+bind square;
+push 0;
+malloc;
+bind z;
+push z;
+store;
+get;
+push z;
+store;
+push z;
+load;
+pop;
+push square;
+push square;
+push z;
+load;
+malloc;
+call;
+push z;
+store;
+push z;
+load;
+pop;
+push succ;
+push succ;
+push z;
+load;
+malloc;
+call;
+push z;
+store;
+push z;
+load;
+pop;
+malloc;
+bind #write_var;
+push z;
+load;
+push #write_var;
+store;
+push #write_var;
+load;
+put;
+push #write_var;
+load;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"10\n"
+
+[Value]
+"101\n"
+
+[Test]
+(* 2. Simple call by reference *)
+test_run 
+
+(*
+  let proc foo(x) = 
+    let proc bar(x) =
+      x := x * 2
+    in
+    (bar<x>; x := x + 1)
+  in
+  let z := 0 in 
+  (
+      read z;
+      foo <z>;
+      write z
+  )
+*)
+
+"
+[push (x,
+  [bind foo;
+  push (x,
+    [bind bar;
+    push x;
+    load;
+    push 2;
+    mul;
+    push x;
+    store;
+    push x;
+    load;
+    unbind;
+    pop]
+    );
+  bind bar;
+  push bar;
+  push bar;
+  push x;
+  load;
+  push x;
+  call;
+  pop;
+  push x;
+  load;
+  push 1;
+  add;
+  push x;
+  store;
+  push x;
+  load;
+  unbind;
+  pop;
+  unbind;
+  pop]
+  );
+bind foo;
+push 0;
+malloc;
+bind z;
+push z;
+store;
+get;
+push z;
+store;
+push z;
+load;
+pop;
+push foo;
+push foo;
+push z;
+load;
+push z;
+call;
+pop;
+malloc;
+bind #write_var;
+push z;
+load;
+push #write_var;
+store;
+push #write_var;
+load;
+put;
+push #write_var;
+load;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"20\n"
+
+[Value]
+"41\n"
+
+
+[Test]
+(* 3. Simple Recursion 1 *)
+test_run 
+
+(*
+  let proc fac (x) = 
+      if x = 1 then 
+          1 
+      else x * fac (x-1) in 
+  let y := 0 in
+  (
+      read y;
+      write (fac (y))
+  )
+*)
+
+"
+[push (x,
+  [bind fac;
+  push x;
+  load;
+  push 1;
+  eq;
+  jtr (
+    [push 1],
+    [push x;
+    load;
+    push fac;
+    push fac;
+    push x;
+    load;
+    push 1;
+    sub;
+    malloc;
+    call;
+    mul]);
+  unbind;
+  pop]
+  );
+bind fac;
+push 0;
+malloc;
+bind y;
+push y;
+store;
+get;
+push y;
+store;
+push y;
+load;
+pop;
+malloc;
+bind #write_var;
+push fac;
+push fac;
+push y;
+load;
+malloc;
+call;
+push #write_var;
+store;
+push #write_var;
+load;
+put;
+push #write_var;
+load;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"6\n"
+
+[Value]
+"720\n"
+
+[Test]
+(* 4. Simple Recursion 2 *)
+test_run 
+
+(*
+  let proc fib (x) = 
+      if x < 2 then 
+          1 
+      else fib (x-2) + fib (x-1) 
+  in
+  (
+    let y := 0 in
+    read y;
+    write (fib(y))
+  )
+*)
+
+"
+[push (x,
+  [bind fib;
+  push x;
+  load;
+  push 2;
+  less;
+  jtr (
+    [push 1],
+    [push fib;
+    push fib;
+    push x;
+    load;
+    push 2;
+    sub;
+    malloc;
+    call;
+    push fib;
+    push fib;
+    push x;
+    load;
+    push 1;
+    sub;
+    malloc;
+    call;
+    add]);
+  unbind;
+  pop]
+  );
+bind fib;
+push 0;
+malloc;
+bind y;
+push y;
+store;
+get;
+push y;
+store;
+push y;
+load;
+pop;
+malloc;
+bind #write_var;
+push fib;
+push fib;
+push y;
+load;
+malloc;
+call;
+push #write_var;
+store;
+push #write_var;
+load;
+put;
+push #write_var;
+load;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"10\n"
+
+[Value]
+"89\n"
+
+
+[Test]
+(* 5. Call by value with nested call *)
+test_run 
+
+(*
+  let proc inc(x) = (x + 1) in 
+  let proc f(x) = inc(x) * inc(x) in
+  let y := 0 in 
+  (
+      read y;
+      write f(y)
+  )
+*)
+
+"
+[push (x,
+  [bind inc;
+  push x;
+  load;
+  push 1;
+  add;
+  unbind;
+  pop]
+  );
+bind inc;
+push (x,
+  [bind f;
+  push inc;
+  push inc;
+  push x;
+  load;
+  malloc;
+  call;
+  push inc;
+  push inc;
+  push x;
+  load;
+  malloc;
+  call;
+  mul;
+  unbind;
+  pop]
+  );
+bind f;
+push 0;
+malloc;
+bind y;
+push y;
+store;
+get;
+push y;
+store;
+push y;
+load;
+pop;
+malloc;
+bind #write_var;
+push f;
+push f;
+push y;
+load;
+malloc;
+call;
+push #write_var;
+store;
+push #write_var;
+load;
+put;
+push #write_var;
+load;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"6\n"
+
+[Value]
+"49\n"
+
+[Test]
+(* 6. Call by reference with nested call *)
+test_run 
+
+(*
+  let proc f(x) = (x := x + 9) in 
+  let proc g(y) = (f<y>; y := y + 10) in
+  let z := 0 in 
+  (
+      read z;
+      g<z>;
+      write z
+  )
+*)
+
+"
+[push (x,
+  [bind f;
+  push x;
+  load;
+  push 9;
+  add;
+  push x;
+  store;
+  push x;
+  load;
+  unbind;
+  pop]
+  );
+bind f;
+push (y,
+  [bind g;
+  push f;
+  push f;
+  push y;
+  load;
+  push y;
+  call;
+  pop;
+  push y;
+  load;
+  push 10;
+  add;
+  push y;
+  store;
+  push y;
+  load;
+  unbind;
+  pop]
+  );
+bind g;
+push 0;
+malloc;
+bind z;
+push z;
+store;
+get;
+push z;
+store;
+push z;
+load;
+pop;
+push g;
+push g;
+push z;
+load;
+push z;
+call;
+pop;
+malloc;
+bind #write_var;
+push z;
+load;
+push #write_var;
+store;
+push #write_var;
+load;
+put;
+push #write_var;
+load;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"100\n"
+
+[Value]
+"119\n"
+
+[Test]
+(* 7. Numch revisited *)
+test_run 
+
+(*
+  let proc numch(n) =
+    let proc numch1(n) = 1
+    in
+    let proc numch10(n) =
+      if n<10 then numch1(n)
+      else numch1(n) + numch10(n-10)
+    in
+    let proc numch100(n) =
+      if n<100 then numch10(n)
+      else numch10(n) + numch100(n-100)
+    in
+    let proc numch500(n) =
+      if n<500 then numch100(n)
+      else numch100(n) + numch500(n-500)
+    in
+    numch500(n)
+  in
+  (
+    let input := 0 in
+    read input;
+    write numch(input)
+  )
+*)
+
+"
+[push (n,
+  [bind numch;
+  push (n,
+    [bind numch1;
+    push 1;
+    unbind;
+    pop]
+    );
+  bind numch1;
+  push (n,
+    [bind numch10;
+    push n;
+    load;
+    push 10;
+    less;
+    jtr (
+      [push numch1;
+      push numch1;
+      push n;
+      load;
+      malloc;
+      call],
+      [push numch1;
+      push numch1;
+      push n;
+      load;
+      malloc;
+      call;
+      push numch10;
+      push numch10;
+      push n;
+      load;
+      push 10;
+      sub;
+      malloc;
+      call;
+      add]);
+    unbind;
+    pop]
+    );
+  bind numch10;
+  push (n,
+    [bind numch100;
+    push n;
+    load;
+    push 100;
+    less;
+    jtr (
+      [push numch10;
+      push numch10;
+      push n;
+      load;
+      malloc;
+      call],
+      [push numch10;
+      push numch10;
+      push n;
+      load;
+      malloc;
+      call;
+      push numch100;
+      push numch100;
+      push n;
+      load;
+      push 100;
+      sub;
+      malloc;
+      call;
+      add]);
+    unbind;
+    pop]
+    );
+  bind numch100;
+  push (n,
+    [bind numch500;
+    push n;
+    load;
+    push 500;
+    less;
+    jtr (
+      [push numch100;
+      push numch100;
+      push n;
+      load;
+      malloc;
+      call],
+      [push numch100;
+      push numch100;
+      push n;
+      load;
+      malloc;
+      call;
+      push numch500;
+      push numch500;
+      push n;
+      load;
+      push 500;
+      sub;
+      malloc;
+      call;
+      add]);
+    unbind;
+    pop]
+    );
+  bind numch500;
+  push numch500;
+  push numch500;
+  push n;
+  load;
+  malloc;
+  call;
+  unbind;
+  pop;
+  unbind;
+  pop;
+  unbind;
+  pop;
+  unbind;
+  pop;
+  unbind;
+  pop]
+  );
+bind numch;
+push 0;
+malloc;
+bind input;
+push input;
+store;
+get;
+push input;
+store;
+push input;
+load;
+pop;
+malloc;
+bind #write_var;
+push numch;
+push numch;
+push input;
+load;
+malloc;
+call;
+push #write_var;
+store;
+push #write_var;
+load;
+put;
+push #write_var;
+load;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"345\n"
+
+[Value]
+"80\n"
+
+
+[Test]
+(* 8. Recursion nested in a function *)
+test_run 
+
+(*
+  let prev_glob := 0 in
+  (* Prints fibonacci number less then 'x' *)
+  let proc print_fib(x) = 
+    let proc print_fib_helper(cur) = 
+      if cur < x then (
+        let prev_tmp := prev_glob in
+        write cur;
+        prev_glob := cur;
+        print_fib_helper(cur + prev_tmp)
+      )
+      else 
+        ()
+    in     
+    print_fib_helper(1)
+  in 
+  let x := 0 in
+  read x;
+  print_fib (x)
+*)
+
+"
+[push 0;
+malloc;
+bind prev_glob;
+push prev_glob;
+store;
+push (x,
+  [bind print_fib;
+  push (cur,
+    [bind print_fib_helper;
+    push cur;
+    load;
+    push x;
+    load;
+    less;
+    jtr (
+      [push prev_glob;
+      load;
+      malloc;
+      bind prev_tmp;
+      push prev_tmp;
+      store;
+      malloc;
+      bind #write_var;
+      push cur;
+      load;
+      push #write_var;
+      store;
+      push #write_var;
+      load;
+      put;
+      push #write_var;
+      load;
+      unbind;
+      pop;
+      pop;
+      push cur;
+      load;
+      push prev_glob;
+      store;
+      push prev_glob;
+      load;
+      pop;
+      push print_fib_helper;
+      push print_fib_helper;
+      push cur;
+      load;
+      push prev_tmp;
+      load;
+      add;
+      malloc;
+      call;
+      unbind;
+      pop],
+      [push unit]);
+    unbind;
+    pop]
+    );
+  bind print_fib_helper;
+  push print_fib_helper;
+  push print_fib_helper;
+  push 1;
+  malloc;
+  call;
+  unbind;
+  pop;
+  unbind;
+  pop]
+  );
+bind print_fib;
+push 0;
+malloc;
+bind x;
+push x;
+store;
+get;
+push x;
+store;
+push x;
+load;
+pop;
+push print_fib;
+push print_fib;
+push x;
+load;
+malloc;
+call;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"9\n"
+
+[Value]
+"1\n1\n2\n3\n5\n8\n"
+
+[Test]
+(* 9. Recursion inside recursive function *)
+test_run 
+
+(*
+  let proc sum (n) = 
+    if n < 1 then 0 else n + sum (n - 1)
+  in
+  let proc diag (x) = 
+    if x < 1 then 0 else (sum (x)) + diag (x - 1)
+  in
+  let x := 0 in
+  read x;
+  write (diag (x))
+*)
+
+"
+[push (n,
+  [bind sum;
+  push n;
+  load;
+  push 1;
+  less;
+  jtr (
+    [push 0],
+    [push n;
+    load;
+    push sum;
+    push sum;
+    push n;
+    load;
+    push 1;
+    sub;
+    malloc;
+    call;
+    add]);
+  unbind;
+  pop]
+  );
+bind sum;
+push (x,
+  [bind diag;
+  push x;
+  load;
+  push 1;
+  less;
+  jtr (
+    [push 0],
+    [push sum;
+    push sum;
+    push x;
+    load;
+    malloc;
+    call;
+    push diag;
+    push diag;
+    push x;
+    load;
+    push 1;
+    sub;
+    malloc;
+    call;
+    add]);
+  unbind;
+  pop]
+  );
+bind diag;
+push 0;
+malloc;
+bind x;
+push x;
+store;
+get;
+push x;
+store;
+push x;
+load;
+pop;
+malloc;
+bind #write_var;
+push diag;
+push diag;
+push x;
+load;
+malloc;
+call;
+push #write_var;
+store;
+push #write_var;
+load;
+put;
+push #write_var;
+load;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"10\n"
+
+[Value]
+"220\n"
+
+[Test]
+(* 10. Two functions calling common function *)
+test_run
+
+(*
+  let proc print (x) = write x in
+  let proc print_err (x) = 
+    write 0;
+    print (x)
+  in
+  let proc print_msg (x) = 
+    write 1;
+    print (x)
+  in
+  let proc f (x) = 
+    if (x < 20) then
+      print_msg (x)
+    else
+      print_err (x)
+  in
+  let proc g (y) = 
+    if (20 < y) then
+      print_msg (y)
+    else
+      print_err (y)
+  in
+  let proc h (z) = 
+    f(z - 5);
+    f(z + 5);
+    g(z - 5);
+    g(z + 5)
+  in
+  let x := 0 in
+  read x;
+  h (x)
+*)
+
+"
+[push (x,
+  [bind print;
+  malloc;
+  bind #write_var;
+  push x;
+  load;
+  push #write_var;
+  store;
+  push #write_var;
+  load;
+  put;
+  push #write_var;
+  load;
+  unbind;
+  pop;
+  unbind;
+  pop]
+  );
+bind print;
+push (x,
+  [bind print_err;
+  malloc;
+  bind #write_var;
+  push 0;
+  push #write_var;
+  store;
+  push #write_var;
+  load;
+  put;
+  push #write_var;
+  load;
+  unbind;
+  pop;
+  pop;
+  push print;
+  push print;
+  push x;
+  load;
+  malloc;
+  call;
+  unbind;
+  pop]
+  );
+bind print_err;
+push (x,
+  [bind print_msg;
+  malloc;
+  bind #write_var;
+  push 1;
+  push #write_var;
+  store;
+  push #write_var;
+  load;
+  put;
+  push #write_var;
+  load;
+  unbind;
+  pop;
+  pop;
+  push print;
+  push print;
+  push x;
+  load;
+  malloc;
+  call;
+  unbind;
+  pop]
+  );
+bind print_msg;
+push (x,
+  [bind f;
+  push x;
+  load;
+  push 20;
+  less;
+  jtr (
+    [push print_msg;
+    push print_msg;
+    push x;
+    load;
+    malloc;
+    call],
+    [push print_err;
+    push print_err;
+    push x;
+    load;
+    malloc;
+    call]);
+  unbind;
+  pop]
+  );
+bind f;
+push (y,
+  [bind g;
+  push 20;
+  push y;
+  load;
+  less;
+  jtr (
+    [push print_msg;
+    push print_msg;
+    push y;
+    load;
+    malloc;
+    call],
+    [push print_err;
+    push print_err;
+    push y;
+    load;
+    malloc;
+    call]);
+  unbind;
+  pop]
+  );
+bind g;
+push (z,
+  [bind h;
+  push f;
+  push f;
+  push z;
+  load;
+  push 5;
+  sub;
+  malloc;
+  call;
+  pop;
+  push f;
+  push f;
+  push z;
+  load;
+  push 5;
+  add;
+  malloc;
+  call;
+  pop;
+  push g;
+  push g;
+  push z;
+  load;
+  push 5;
+  sub;
+  malloc;
+  call;
+  pop;
+  push g;
+  push g;
+  push z;
+  load;
+  push 5;
+  add;
+  malloc;
+  call;
+  unbind;
+  pop]
+  );
+bind h;
+push 0;
+malloc;
+bind x;
+push x;
+store;
+get;
+push x;
+store;
+push x;
+load;
+pop;
+push h;
+push h;
+push x;
+load;
+malloc;
+call;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"20\n"
+
+[Value]
+"1\n15\n0\n25\n0\n15\n1\n25\n"
+
+[Test]
+
+(* 11. Call cycle between two functions *)
+test_run
+
+(*
+  let proc is_even(n) = 
+    (n / 2) * 2 = n
+  in
+  let proc f (x) = 
+    let proc g(y) = 
+      if y = 1 then
+        1
+      else if (is_even(y)) then
+        f (y)
+      else
+        (write y;
+        f (3 * y + 1))
+    in
+
+    if x = 1 then
+      1
+    else if (is_even (x)) then
+      (write x;
+      g (x / 2))
+    else
+      g (x)
+  in
+  let x := 0 in
+  read x;
+  write (f (x))
+*)
+
+"
+[push (n,
+  [bind is_even;
+  push n;
+  load;
+  push 2;
+  div;
+  push 2;
+  mul;
+  push n;
+  load;
+  eq;
+  unbind;
+  pop]
+  );
+bind is_even;
+push (x,
+  [bind f;
+  push (y,
+    [bind g;
+    push y;
+    load;
+    push 1;
+    eq;
+    jtr (
+      [push 1],
+      [push is_even;
+      push is_even;
+      push y;
+      load;
+      malloc;
+      call;
+      jtr (
+        [push f;
+        push f;
+        push y;
+        load;
+        malloc;
+        call],
+        [malloc;
+        bind #write_var;
+        push y;
+        load;
+        push #write_var;
+        store;
+        push #write_var;
+        load;
+        put;
+        push #write_var;
+        load;
+        unbind;
+        pop;
+        pop;
+        push f;
+        push f;
+        push 3;
+        push y;
+        load;
+        mul;
+        push 1;
+        add;
+        malloc;
+        call])]);
+    unbind;
+    pop]
+    );
+  bind g;
+  push x;
+  load;
+  push 1;
+  eq;
+  jtr (
+    [push 1],
+    [push is_even;
+    push is_even;
+    push x;
+    load;
+    malloc;
+    call;
+    jtr (
+      [malloc;
+      bind #write_var;
+      push x;
+      load;
+      push #write_var;
+      store;
+      push #write_var;
+      load;
+      put;
+      push #write_var;
+      load;
+      unbind;
+      pop;
+      pop;
+      push g;
+      push g;
+      push x;
+      load;
+      push 2;
+      div;
+      malloc;
+      call],
+      [push g;
+      push g;
+      push x;
+      load;
+      malloc;
+      call])]);
+  unbind;
+  pop;
+  unbind;
+  pop]
+  );
+bind f;
+push 0;
+malloc;
+bind x;
+push x;
+store;
+get;
+push x;
+store;
+push x;
+load;
+pop;
+malloc;
+bind #write_var;
+push f;
+push f;
+push x;
+load;
+malloc;
+call;
+push #write_var;
+store;
+push #write_var;
+load;
+put;
+push #write_var;
+load;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"10\n"
+
+[Value]
+"10\n5\n16\n8\n4\n2\n1\n"
+
+
+[Test]
+(* 12. Call cycle between three functions *)
+test_run
+(*
+  let proc f (x) =
+    let proc g (y) = 
+      let proc h (z) =
+        if z < 0 then
+          z
+        else (
+          write (z);
+          f (z-1)
+        )
+      in
+      h (y-1)
+    in
+    g (x - 1)
+  in
+  let x := 0 in
+  read x;
+  f (x)
+*)
+
+"
+[push (x,
+  [bind f;
+  push (y,
+    [bind g;
+    push (z,
+      [bind h;
+      push z;
+      load;
+      push 0;
+      less;
+      jtr (
+        [push z;
+        load],
+        [malloc;
+        bind #write_var;
+        push z;
+        load;
+        push #write_var;
+        store;
+        push #write_var;
+        load;
+        put;
+        push #write_var;
+        load;
+        unbind;
+        pop;
+        pop;
+        push f;
+        push f;
+        push z;
+        load;
+        push 1;
+        sub;
+        malloc;
+        call]);
+      unbind;
+      pop]
+      );
+    bind h;
+    push h;
+    push h;
+    push y;
+    load;
+    push 1;
+    sub;
+    malloc;
+    call;
+    unbind;
+    pop;
+    unbind;
+    pop]
+    );
+  bind g;
+  push g;
+  push g;
+  push x;
+  load;
+  push 1;
+  sub;
+  malloc;
+  call;
+  unbind;
+  pop;
+  unbind;
+  pop]
+  );
+bind f;
+push 0;
+malloc;
+bind x;
+push x;
+store;
+get;
+push x;
+store;
+push x;
+load;
+pop;
+push f;
+push f;
+push x;
+load;
+malloc;
+call;
+unbind;
+pop;
+unbind;
+pop]
+"
+
+"15"
+
+[Value]
+"13\n10\n7\n4\n1\n"
+

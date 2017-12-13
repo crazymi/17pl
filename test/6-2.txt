@@ -1,0 +1,137 @@
+[Header]
+
+open M0
+
+exception Invalid_CPS
+
+let rec is_aexp = function
+  | Num _ | Var _ -> true
+  | Fn(_, e) -> is_cexp e
+  | Rec (_, _, e) -> is_cexp e
+  | Add (e1, e2) | Pair (e1, e2) -> is_aexp e1 && is_aexp e2
+  | Fst e | Snd e -> is_aexp e
+  | _ -> false
+
+and is_cexp e =
+  match e with
+  | Ifz (e1, e2, e3) -> is_aexp e1 && is_cexp e2 && is_cexp e3
+  | App (e1, e2) -> is_aexp e2 && is_cexp e1
+  | _ -> is_aexp e
+
+let is_cps = is_aexp
+
+let test mexp_str = 
+  let input_mexp = Parser.program Lexer.start (Lexing.from_string mexp_str) in
+  let cps_mexp = Cps.cps input_mexp in
+  
+  let _ = if not (is_cps cps_mexp) then raise Invalid_CPS in
+  
+  let id = Fn ("x", Var "x") in
+  match (run (App (cps_mexp, id)), run input_mexp) with
+  | N n1, N n2 -> n1 = n2
+  | _ -> false
+
+[Test]
+(* 1. add, app  *)
+test "2 + 3 + ((fn x => x + 10) 0) + 4"
+
+[Value]
+true
+
+[Test]
+(* 2. ifzero, pair, app, add *)
+test "ifzero (fn x => x + 1) 2 then (fn x => x) 3 else (4, 1 + 2).2" 
+
+[Value]
+true
+
+[Test]
+(* 3. add, multiple app *)
+test "(fn x => (fn y => (fn z => x + y + z))) 1 2 3"
+
+[Value]
+true
+
+[Test]
+(* 4. complex pair and app *)
+test "(fn x => x.2) ((fn x => x.1) ((4, 2), 3))"
+
+[Value]
+true
+
+[Test]
+(* 5. complex pair, sel *)
+test "(1, (2, 3)).2.1"
+
+[Value]
+true
+
+[Test]
+(* 6. Recursion *)
+test "(rec f x => ifzero x then 0 else x + f (x + (-1))) 10"
+
+[Value]
+true
+
+[Test]
+(* 7. high-order function *)
+test "(fn f => (fn g => g (f (3, 4)))) (fn x => x.1 + 2) (fn x => x + 1)"
+
+[Value]
+true
+
+
+[Test]
+(* 8. recursion with pair *)
+test 
+"
+  (rec f x => 
+    ifzero (x + (-1)) then 
+      1 
+    else (
+      (rec g y => 
+        (ifzero y.2 then 
+          0 
+        else 
+          ((g (y.1, (y.2 + (-1)))) + (y.1)))
+      ) (x, f (x + (-1))) 
+    )
+  ) 3
+"
+
+[Value]
+true
+
+[Test]
+(* 9. recursion with high order function *)
+test 
+"
+  (fn f => f (f 5))
+  (rec sum x => (ifzero x then 0 else (sum (x + (-1)) + x)))
+"
+
+[Value]
+true
+
+[Test]
+(* 10. Partial application *)
+test "(fn f => f 10) ((fn x => (fn y => x + y)) 5)"
+
+[Value]
+true
+
+[Test]
+(* 11. Pairwise Addition *)
+test "(fn p => p.1) ((fn p1 => (fn p2 => ((p1.1) + (p2.1), (p1.2) + (p2.2))) (10, 20)) (30, 40))"
+
+[Value]
+true
+
+[Test]
+(* 12. Add pair componenets *)
+test "(fn p => p.1 + (p.2.1) + (p.2.2)) (10, (20, 30))"
+
+[Value]
+true
+
+

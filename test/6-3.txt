@@ -1,0 +1,217 @@
+[Header]
+
+open M
+open Unix
+
+let stdout_redirect_f = "stdout_redirect.txt"
+let stdin_redirect_f = "stdin_redirect.txt"
+
+let read_all filename = 
+  let chan = open_in filename in 
+  let res = really_input_string chan (in_channel_length chan) in
+  let _ = close_in chan in 
+  res
+
+let test_run pgm_str input_str = 
+  (* Creating program *)
+  let lexbuf = Lexing.from_string pgm_str in
+  let pgm = Parser.program Lexer.start lexbuf in
+
+  (* Write testcase input string to a file *)
+  let chan = open_out stdin_redirect_f in
+  let _ = Printf.fprintf chan input_str in
+  let _ = close_out chan in
+
+  (* Stdin Redirection *)
+  let new_stdin = open_in stdin_redirect_f in
+  let _ = Unix.dup2 (Unix.descr_of_in_channel new_stdin) Unix.stdin in
+
+  (* Stdout Redirection *)
+  let new_stdout = open_out stdout_redirect_f in
+  let _ = Unix.dup2 (Unix.descr_of_out_channel new_stdout) Unix.stdout in
+
+  (* Run the translated program *)
+  let _ = M.run pgm in
+  
+  read_all stdout_redirect_f
+
+let test_type_err pgm_str = 
+  (* Creating program *)
+  let lexbuf = Lexing.from_string pgm_str in
+  let pgm = Parser.program Lexer.start lexbuf in
+  (* Run and check type error *)
+  try (let _ = M.run pgm in false) with 
+  | M.TypeError _ -> true
+  | exn -> raise exn
+
+[Test]
+(* 1 *)
+test_run
+
+"write ((write 1) + read)"
+
+"2"
+
+[Value]
+"1\n3\n"
+
+
+[Test]
+(* 2 *)
+test_run 
+"let val x = malloc 10 in write(!x) end"
+""
+
+[Value]
+"10\n"
+
+
+[Test]
+(* 3 *)
+test_run 
+
+"
+let val x = malloc 1 in
+  x := (5, 6); 
+  write ((!x).2)
+end
+"
+
+""
+
+[Value]
+"6\n"
+
+
+[Test]
+(* 4 *)
+test_type_err
+
+"
+let val x = malloc (1, true) in
+  if (x.2 and (x.1 = 1)) then
+    write (x.1 + x.2)
+  else
+    write x.1
+end
+"
+
+[Value]
+true
+
+[Test]
+(* 5 *)
+test_run 
+
+"
+let rec sum = fn x =>
+ if (x = 0) then 
+   0
+ else
+   (x + sum (x - 1))
+in
+  write (sum 5)
+end
+"
+
+""
+
+[Value]
+"15\n"
+
+
+[Test]
+(* 6 *)
+test_run
+"
+let val p = malloc (2, (malloc 3, 4)) in
+  write (!p).1 + !((!p).2.1)
+end
+"
+
+""
+
+[Value]
+"5\n"
+
+[Test]
+(* 7 *)
+test_run 
+"
+let 
+  val x = (malloc (1, 2), 3)
+in
+ x.1 := (4, 5);
+ write ((!(x.1)).2)
+end
+"
+
+""
+
+[Value]
+"5\n"
+
+
+[Test]
+(* 8 *)
+test_run 
+
+"let val k = malloc 2 in
+ (fn y => fn z => (!y) z) 
+  (malloc (fn x => x := (!x + 1))) k;
+ write ((!k))
+end
+"
+
+""
+
+[Value]
+"3\n"
+
+
+[Test]
+(* 9 : recursion *)
+test_run
+
+"let 
+ rec sum = fn x => 
+   if (x = 0) then 
+     0
+   else
+     (x + sum (x - 1))
+ rec diag = fn x => 
+   if (x = 0) then 
+     0
+   else
+     (sum x + diag (x - 1))
+in
+  write (diag (sum 5))
+end
+"
+
+""
+
+[Value]
+"680\n"
+
+
+[Test]
+(* 10 : recursion + high order function + scope *)
+test_run
+
+"let 
+  rec f = fn x => 2
+  rec f = fn x => 
+   (if (x = 0) then 
+    0
+   else
+    (x + (f (x - 1))))
+  val foo = fn f => f (10)
+in
+  write (foo f)
+end"
+
+""
+
+[Value]
+"55\n"
