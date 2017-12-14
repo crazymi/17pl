@@ -16,6 +16,7 @@ type typ =
   | TFun of typ * typ
   | TVar of var
   (* Modify, or add more if needed *)
+  | TEq of var
 
 type typ_scheme =
   | SimpleTyp of typ 
@@ -43,7 +44,8 @@ let rec ftv_of_typ : typ -> var list = function
   | TPair (t1, t2) -> union_ftv (ftv_of_typ t1) (ftv_of_typ t2)
   | TLoc t -> ftv_of_typ t
   | TFun (t1, t2) ->  union_ftv (ftv_of_typ t1) (ftv_of_typ t2)
-  | TVar v -> [v]
+  | TVar v
+  | TEq v -> [v]
 
 let ftv_of_scheme : typ_scheme -> var list = function
   | SimpleTyp t -> ftv_of_typ t
@@ -73,6 +75,7 @@ let empty_subst : subst = fun t -> t
 let make_subst : var -> typ -> subst = fun x t ->
   let rec subs t' = 
     match t' with
+    | TEq x'
     | TVar x' -> if (x = x') then t else t'
     | TPair (t1, t2) -> TPair (subs t1, subs t2)
     | TLoc t'' -> TLoc (subs t'')
@@ -118,14 +121,38 @@ let rec expansive : M.exp -> bool = fun exp ->
   | M.FST e | M.SND e
     -> expansive(e)
 
-
-let unify : typ * typ -> subst = fun (t1, t2) ->
-  match (t1, t2) with
-  | (TInt, TInt) -> empty_subst
-  | (TBool, TBool) -> empty_subst
-  | (TString, TString) -> empty_subst
-  | _ -> empty_subst
-
+let rec unify : typ * typ -> subst = fun tat ->
+  let rec isin : var -> typ -> bool = fun alpha tau ->
+    match tau with
+    | TPair (t1, t2) | TFun(t1, t2) -> (isin alpha t1) || (isin alpha t2)
+    | TLoc l -> isin alpha l
+    | TVar v -> v = alpha
+    | _ -> false
+  in
+  match tat with
+  | (t1, t2) when t1=t2 -> empty_subst
+  | (TPair (t1, t2), TPair (t1', t2'))
+  | (TFun (t1, t2), TFun (t1', t2')) ->
+      let s = unify (t1, t1') in
+      let s' = unify ((s t2), (s t2')) in
+      (s' @@ s)
+  | (t, TVar v)
+  | (TVar v, t) ->
+      if (isin v t) then
+        raise (M.TypeError "unify isin fail")
+      else
+        make_subst v t
+  | (t, TEq v)
+  | (TEq v, t) ->
+      if (isin v t) then
+        raise (M.TypeError "unify isin fail")
+      else
+        begin
+          match t with
+          | TInt | TBool | TString | TLoc _ | TEq _ -> make_subst v t
+          | _ -> raise (M.TypeError "TEq type error")
+        end
+  | _ -> raise (M.TypeError "unify failure")
 
 let rec p2s : typ -> M.typ = fun t ->
   match t with
@@ -136,6 +163,7 @@ let rec p2s : typ -> M.typ = fun t ->
   | TLoc t' -> M.TyLoc (p2s t')
   | TFun (t1, t2) -> raise (M.TypeError "fail to infer tfun type")
   | TVar v -> raise (M.TypeError ("fail to infer " ^ v ^ " type"))
+  | TEq v -> raise (M.TypeError "fail to infer teq type")
   | _ -> raise (M.TypeError "fail to infer type")
 
 (* identical to W in lecture pdf *)
@@ -150,8 +178,9 @@ let rec tcheck : typ_env * M.exp -> typ * subst = fun (env, exp) ->
       end
   | M.VAR id -> 
       begin
-        let (i, scheme) = List.find (fun (i, _) -> i=id) env in
-        match scheme with
+        let (i, scheme) = List.find (fun (i', _) -> i'=id) env in
+        let sub_scheme = subst_scheme empty_subst scheme in
+        match sub_scheme with
         | SimpleTyp t -> (t, empty_subst)
         | GenTyp (vl, t) -> (t, empty_subst)
       end
@@ -204,7 +233,12 @@ let rec tcheck : typ_env * M.exp -> typ * subst = fun (env, exp) ->
             let (t', s'') = tcheck ((subst_env (s' @@ s) env), e2) in
             let s''' = unify (t', TBool) in
             (TBool, s''' @@ s'' @@ s' @@ s)
-        | M.EQ -> raise (M.TypeError "eq")
+        | M.EQ ->
+            let (t, s) = tcheck (env, e1) in
+            let s' = unify (t, TEq (new_var ())) in
+            let (t', s'') = tcheck ((subst_env (s' @@ s) env), e2) in
+            let s''' = unify (t', TEq (new_var ())) in
+            (TBool, s''' @@ s'' @@ s' @@ s)
       end
   | M.READ -> (TInt, empty_subst)
   | M.WRITE e -> raise (M.TypeError "write")
@@ -238,8 +272,8 @@ let rec tcheck : typ_env * M.exp -> typ * subst = fun (env, exp) ->
       ((s' @@ s) t', s' @@ s)
   | M.PAIR (e1, e2) ->
       let (t, s) = tcheck (env, e1) in
-      let (t', s') = tcheck (subst_env s env, e1) in
-      ((s @@ s') (TPair (t, t')), s @@ s')
+      let (t', s') = tcheck (subst_env s env, e2) in
+      ((s' @@ s) (TPair (t, t')), s' @@ s)
   | M.FST e ->
       let (tpair, s) = tcheck (env, e) in
       begin
