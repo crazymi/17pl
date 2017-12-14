@@ -98,7 +98,77 @@ let subst_scheme : subst -> typ_scheme -> typ_scheme = fun subs tyscm ->
 let subst_env : subst -> typ_env -> typ_env = fun subs tyenv ->
   List.map (fun (x, tyscm) -> (x, subst_scheme subs tyscm)) tyenv
 
-
 (* TODO : Implement this function *)
-let check : M.exp -> M.typ =
-  raise (M.TypeError "Type Checker Unimplemented")
+let unify : typ * typ -> subst = fun (t1, t2) ->
+  raise (M.TypeError "unify")
+
+let rec p2s : typ -> M.typ = fun t ->
+  match t with
+  | TInt -> M.TyInt
+  | TBool -> M.TyBool
+  | TString -> M.TyString
+  | TPair (t1, t2) -> M.TyPair (p2s t1, p2s t2)
+  | TLoc t' -> M.TyLoc (p2s t')
+  | _ -> raise (M.TypeError "fail to infer type")
+
+(* identical to W in lecture pdf *)
+let rec tcheck : typ_env * M.exp -> typ * subst = fun (env, exp) ->
+  match exp with
+  | M.CONST c ->
+      begin
+        match c with
+        | M.S _ -> (TString, empty_subst)
+        | M.N _ -> (TInt, empty_subst)
+        | M.B _ -> (TBool, empty_subst)
+      end
+  | M.VAR id -> 
+      (* if id:t is in env *)
+      begin
+        let (i, scheme) = List.find (fun (i, _) -> i=id) env in
+        match scheme with
+        | SimpleTyp t -> (t, empty_subst)
+        | GenTyp (vl, t) -> (t, empty_subst)
+      end
+  | M.FN (id, e) ->
+      let alpha = TVar (new_var ()) in
+      let alpha_scheme = (id, SimpleTyp alpha) in
+      let (t, s) = tcheck (alpha_scheme :: env, e) in
+      (s (TFun (s alpha, t)), s)
+  | M.APP (e1, e2) ->
+      let (t, s) = tcheck (env, e1) in
+      let (t', s') = tcheck (subst_env s env, e2) in
+      let alpha = TVar (new_var ()) in
+      let s'' = unify (TFun (t', alpha), s' t) in
+      (s'' alpha, s'' @@ s' @@ s)
+  | M.LET (decl, e) -> raise (M.TypeError "let")
+  | M.IF (e1, e2, e3) -> raise (M.TypeError "if")
+  | M.BOP (b, e1, e2) ->
+      begin
+        match b with
+        | M.ADD | M.SUB ->
+            let (t, s) = tcheck (env, e1) in
+            let s' = unify (t, TInt) in
+            let (t', s'') = tcheck ((subst_env (s' @@ s) env), e2) in
+            let s''' = unify (t', TInt) in
+            (TInt, s''' @@ s'' @@ s' @@ s)
+        | M.AND | M.OR ->
+            let (t, s) = tcheck (env, e1) in
+            let s' = unify (t, TBool) in
+            let (t', s'') = tcheck ((subst_env (s' @@ s) env), e2) in
+            let s''' = unify (t', TBool) in
+            (TBool, s''' @@ s'' @@ s' @@ s)
+        | M.EQ -> raise (M.TypeError "eq")
+      end
+  | M.READ -> (TInt, empty_subst)
+  | M.WRITE e -> raise (M.TypeError "write")
+  | M.MALLOC e -> raise (M.TypeError "malloc")
+  | M.ASSIGN (e1, e2) -> raise (M.TypeError "assign")
+  | M.BANG e -> raise (M.TypeError "bang")
+  | M.SEQ (e1, e2) -> raise (M.TypeError "seq")
+  | M.PAIR (e1, e2) -> raise (M.TypeError "pair")
+  | M.FST e -> raise (M.TypeError "fst")
+  | M.SND e -> raise (M.TypeError "snd")
+
+let check : M.exp -> M.typ = fun mexp ->
+  let (t, _) = tcheck ([], mexp) in
+  p2s t
