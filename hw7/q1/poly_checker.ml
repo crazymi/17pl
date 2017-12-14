@@ -4,6 +4,7 @@
  *)
 
 open M
+open Pp
 
 type var = string
 
@@ -17,6 +18,7 @@ type typ =
   | TVar of var
   (* Modify, or add more if needed *)
   | TEq of var
+  | TWrite of var
 
 type typ_scheme =
   | SimpleTyp of typ 
@@ -44,8 +46,7 @@ let rec ftv_of_typ : typ -> var list = function
   | TPair (t1, t2) -> union_ftv (ftv_of_typ t1) (ftv_of_typ t2)
   | TLoc t -> ftv_of_typ t
   | TFun (t1, t2) ->  union_ftv (ftv_of_typ t1) (ftv_of_typ t2)
-  | TVar v
-  | TEq v -> [v]
+  | TVar v | TEq v | TWrite v -> [v]
 
 let ftv_of_scheme : typ_scheme -> var list = function
   | SimpleTyp t -> ftv_of_typ t
@@ -75,7 +76,7 @@ let empty_subst : subst = fun t -> t
 let make_subst : var -> typ -> subst = fun x t ->
   let rec subs t' = 
     match t' with
-    | TEq x'
+    | TEq x' | TWrite x'
     | TVar x' -> if (x = x') then t else t'
     | TPair (t1, t2) -> TPair (subs t1, subs t2)
     | TLoc t'' -> TLoc (subs t'')
@@ -126,7 +127,7 @@ let rec unify : typ * typ -> subst = fun tat ->
     match tau with
     | TPair (t1, t2) | TFun(t1, t2) -> (isin alpha t1) || (isin alpha t2)
     | TLoc l -> isin alpha l
-    | TVar v -> v = alpha
+    | TVar v | TEq v | TWrite v -> v = alpha
     | _ -> false
   in
   match tat with
@@ -149,8 +150,18 @@ let rec unify : typ * typ -> subst = fun tat ->
       else
         begin
           match t with
-          | TInt | TBool | TString | TLoc _ | TEq _ -> make_subst v t
+          | TInt | TBool | TString | TLoc _ | TEq _ | TWrite _ -> make_subst v t
           | _ -> raise (M.TypeError "TEq type error")
+        end
+  | (t, TWrite v)
+  | (TWrite v, t) ->
+      if (isin v t) then
+        raise (M.TypeError "unify isin fail")
+      else
+        begin
+          match t with
+          | TInt | TBool | TString | TWrite _ -> make_subst v t
+          | _ -> raise (M.TypeError "TWrite type error")
         end
   | _ -> raise (M.TypeError "unify failure")
 
@@ -178,11 +189,14 @@ let rec tcheck : typ_env * M.exp -> typ * subst = fun (env, exp) ->
       end
   | M.VAR id -> 
       begin
-        let (i, scheme) = List.find (fun (i', _) -> i'=id) env in
-        let sub_scheme = subst_scheme empty_subst scheme in
-        match sub_scheme with
-        | SimpleTyp t -> (t, empty_subst)
-        | GenTyp (vl, t) -> (t, empty_subst)
+        try
+          let (i, scheme) = List.find (fun (i', _) -> i'=id) env in
+          let sub_scheme = subst_scheme empty_subst scheme in
+          match sub_scheme with
+          | SimpleTyp t -> (t, empty_subst)
+          | GenTyp (vl, t) -> (t, empty_subst)
+        with
+        | Not_found -> raise (M.TypeError (id ^ " is not defined in scope"))
       end
   | M.FN (id, e) ->
       let alpha = TVar (new_var ()) in
@@ -198,17 +212,30 @@ let rec tcheck : typ_env * M.exp -> typ * subst = fun (env, exp) ->
   | M.LET (decl, e2) ->
       begin
         match decl with
-        | M.REC (id1, id2, e1) -> raise (M.TypeError "let-rec")
-        | M.VAL (id, e1) ->
-            let (t1, s1) = tcheck (env, e1) in
-            let env' = subst_env s1 env in
-            let (t2, s2) = 
-              if (expansive e1) then
-                tcheck ((id, SimpleTyp t1) :: env', e2)
+        | M.REC (id1, id2, e1) ->
+            let alpha = TVar  (new_var ()) in
+            let alpha_scheme = (id1, SimpleTyp alpha) in
+
+            let (t, s) = tcheck (alpha_scheme :: env, M.FN (id2, e1)) in
+            let s' = unify (s alpha, t) in
+            let env' = subst_env (s' @@ s) env in
+            let (t', s'') =
+              if (expansive (M.FN (id2, e1))) then
+                tcheck ((id1, SimpleTyp (s' t)) :: env', e2)
               else
-                tcheck ((id, generalize env' t1) :: env', e2)
+                tcheck ((id1, generalize env' (s' t)) :: env', e2)
             in
-            ((s2 @@ s1) t2, s2 @@ s1)
+            ((s'' @@ s' @@ s) t', s'' @@ s' @@ s)
+        | M.VAL (id, e1) ->
+            let (t, s) = tcheck (env, e1) in
+            let env' = subst_env s env in
+            let (t', s') = 
+              if (expansive e1) then
+                tcheck ((id, SimpleTyp t) :: env', e2)
+              else
+                tcheck ((id, generalize env' t) :: env', e2)
+            in
+            ((s' @@ s) t', s' @@ s)
       end
   | M.IF (e1, e2, e3) ->
       let (t, s) = tcheck (env, e1) in
@@ -241,7 +268,10 @@ let rec tcheck : typ_env * M.exp -> typ * subst = fun (env, exp) ->
             (TBool, s''' @@ s'' @@ s' @@ s)
       end
   | M.READ -> (TInt, empty_subst)
-  | M.WRITE e -> raise (M.TypeError "write")
+  | M.WRITE e ->
+      let (t, s) = tcheck (env, e) in
+      let s' = unify (t, TWrite (new_var ())) in
+      ((s' @@ s) t, s' @@ s)
   | M.MALLOC e ->
       let (t, s) = tcheck (env, e) in
       (s (TLoc t), s)
