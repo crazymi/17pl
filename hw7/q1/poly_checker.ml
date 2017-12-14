@@ -99,8 +99,33 @@ let subst_env : subst -> typ_env -> typ_env = fun subs tyenv ->
   List.map (fun (x, tyscm) -> (x, subst_scheme subs tyscm)) tyenv
 
 (* TODO : Implement this function *)
+let rec expansive : M.exp -> bool = fun exp ->
+  match exp with
+  | M.CONST _ | M.VAR _ | M.FN _
+  | M.READ | M.WRITE _ 
+  | M.BANG _
+    -> false
+  | M.APP _ | M.MALLOC _ | M.ASSIGN _
+    -> true
+  | M.IF (e1, e2, e3)
+    -> expansive(e1) || expansive(e2) || expansive(e3)
+  | M.LET (M.VAL (_, e1), e2)
+  | M.LET (M.REC (_, _, e1), e2)
+  | M.BOP (_, e1, e2)
+  | M.SEQ (e1, e2)
+  | M.PAIR(e1, e2)
+    -> expansive(e1) || expansive(e2)
+  | M.FST e | M.SND e
+    -> expansive(e)
+
+
 let unify : typ * typ -> subst = fun (t1, t2) ->
-  raise (M.TypeError "unify")
+  match (t1, t2) with
+  | (TInt, TInt) -> empty_subst
+  | (TBool, TBool) -> empty_subst
+  | (TString, TString) -> empty_subst
+  | _ -> empty_subst
+
 
 let rec p2s : typ -> M.typ = fun t ->
   match t with
@@ -109,6 +134,8 @@ let rec p2s : typ -> M.typ = fun t ->
   | TString -> M.TyString
   | TPair (t1, t2) -> M.TyPair (p2s t1, p2s t2)
   | TLoc t' -> M.TyLoc (p2s t')
+  | TFun (t1, t2) -> raise (M.TypeError "fail to infer tfun type")
+  | TVar v -> raise (M.TypeError ("fail to infer " ^ v ^ " type"))
   | _ -> raise (M.TypeError "fail to infer type")
 
 (* identical to W in lecture pdf *)
@@ -122,7 +149,6 @@ let rec tcheck : typ_env * M.exp -> typ * subst = fun (env, exp) ->
         | M.B _ -> (TBool, empty_subst)
       end
   | M.VAR id -> 
-      (* if id:t is in env *)
       begin
         let (i, scheme) = List.find (fun (i, _) -> i=id) env in
         match scheme with
@@ -139,9 +165,30 @@ let rec tcheck : typ_env * M.exp -> typ * subst = fun (env, exp) ->
       let (t', s') = tcheck (subst_env s env, e2) in
       let alpha = TVar (new_var ()) in
       let s'' = unify (TFun (t', alpha), s' t) in
-      (s'' alpha, s'' @@ s' @@ s)
-  | M.LET (decl, e) -> raise (M.TypeError "let")
-  | M.IF (e1, e2, e3) -> raise (M.TypeError "if")
+      ((s'' @@ s' @@ s) alpha, s'' @@ s' @@ s)
+  | M.LET (decl, e2) ->
+      begin
+        match decl with
+        | M.REC (id1, id2, e1) -> raise (M.TypeError "let-rec")
+        | M.VAL (id, e1) ->
+            let (t1, s1) = tcheck (env, e1) in
+            let env' = subst_env s1 env in
+            let (t2, s2) = 
+              if (expansive e1) then
+                tcheck ((id, SimpleTyp t1) :: env', e2)
+              else
+                tcheck ((id, generalize env' t1) :: env', e2)
+            in
+            ((s2 @@ s1) t2, s2 @@ s1)
+      end
+  | M.IF (e1, e2, e3) ->
+      let (t, s) = tcheck (env, e1) in
+      let s' = unify (t, TBool) in
+      let (t', s'') = tcheck (subst_env (s' @@ s) env, e2) in
+      let (t'', s''') = tcheck (subst_env (s'' @@ s' @@ s) env, e3) in
+      let s'''' = unify (t', t'') in
+      let slong = s'''' @@ s''' @@ s'' @@ s' @@ s in
+      (slong t'', slong)
   | M.BOP (b, e1, e2) ->
       begin
         match b with
@@ -161,13 +208,62 @@ let rec tcheck : typ_env * M.exp -> typ * subst = fun (env, exp) ->
       end
   | M.READ -> (TInt, empty_subst)
   | M.WRITE e -> raise (M.TypeError "write")
-  | M.MALLOC e -> raise (M.TypeError "malloc")
-  | M.ASSIGN (e1, e2) -> raise (M.TypeError "assign")
-  | M.BANG e -> raise (M.TypeError "bang")
-  | M.SEQ (e1, e2) -> raise (M.TypeError "seq")
-  | M.PAIR (e1, e2) -> raise (M.TypeError "pair")
-  | M.FST e -> raise (M.TypeError "fst")
-  | M.SND e -> raise (M.TypeError "snd")
+  | M.MALLOC e ->
+      let (t, s) = tcheck (env, e) in
+      (s (TLoc t), s)
+  | M.ASSIGN (e1, e2) ->
+      let (t, s) = tcheck (env, e1) in
+      let (t', s') = tcheck (subst_env s env, e2) in
+      begin
+        match t with
+        | TLoc loc ->
+            let s'' = unify (loc, t') in
+            ((s'' @@ s' @@ s) t', s'' @@ s' @@ s)
+        | _ -> raise (M.TypeError "not location")
+      end
+  | M.BANG e ->
+      let (t, s) = tcheck (env, e) in
+      begin
+        match t with
+        | TLoc loc -> (s loc, s)
+        | TVar v ->
+            let alpha = TVar (new_var ()) in
+            let s' = make_subst v (TLoc alpha) in
+            ((s' @@ s) alpha, s' @@ s)
+        | _ -> raise (M.TypeError "not location")
+      end
+  | M.SEQ (e1, e2) ->
+      let (t, s) = tcheck (env, e1) in
+      let (t', s') = tcheck (subst_env s env, e2) in
+      ((s' @@ s) t', s' @@ s)
+  | M.PAIR (e1, e2) ->
+      let (t, s) = tcheck (env, e1) in
+      let (t', s') = tcheck (subst_env s env, e1) in
+      ((s @@ s') (TPair (t, t')), s @@ s')
+  | M.FST e ->
+      let (tpair, s) = tcheck (env, e) in
+      begin
+        match tpair with
+        | TPair (t, _) -> (s t, s)
+        | TVar v ->
+            let alpha = TVar (new_var ())  in
+            let alpha' = TVar (new_var ()) in
+            let s' = make_subst v (TPair (alpha, alpha')) @@ s in
+            (s' alpha, s')
+        | _ -> raise (M.TypeError "not pair")
+      end
+  | M.SND e ->
+      let (tpair, s) = tcheck (env, e) in
+      begin
+        match tpair with
+        | TPair (_, t) -> (s t, s)
+        | TVar v ->
+            let alpha = TVar (new_var ())  in
+            let alpha' = TVar (new_var ()) in
+            let s' = make_subst v (TPair (alpha, alpha')) @@ s in
+            (s' alpha', s')
+        | _ -> raise (M.TypeError "not pair")
+      end
 
 let check : M.exp -> M.typ = fun mexp ->
   let (t, _) = tcheck ([], mexp) in
